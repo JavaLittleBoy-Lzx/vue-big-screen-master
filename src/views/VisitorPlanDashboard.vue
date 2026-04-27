@@ -542,7 +542,7 @@ export default {
         this.isLoading = true;
         console.log('📊 [今日计划看板] 开始加载统计数据...');
         
-        const response = await axios.get('http://10.100.111.2:8675/parking/visitor/plan-dashboard/statistics', {
+        const response = await axios.get('http://localhost:8675/parking/visitor/plan-dashboard/statistics', {
           params: {
             timeRange: this.timeRange
           }
@@ -790,7 +790,7 @@ export default {
         const expectedCount = this.modalType === 'visitor' ? this.visitorStats.total : this.vehicleStats.expected;
         console.log(`🔍 [问题分析] 统计API显示: ${expectedCount} 条，但详情API却只返回了119条`);
         console.log('� [可能原因] 详情API默认只返回“未离场”的记录，而统计API统计所有记录');
-        console.log(`� [计划看板] 请求URL: http://10.100.111.2:8675/parking/visitor/plan-dashboard/detail-list`);
+        console.log(`� [计划看板] 请求URL: http://localhost:8675/parking/visitor/plan-dashboard/detail-list`);
         console.log('🔵 [计划看板] 尝试showAll参数获取所有记录，期望:', expectedCount, '条');
         
         const requestParams = { 
@@ -801,7 +801,7 @@ export default {
         
         console.log('📤 [请求参数] 实际发送:', requestParams);
         
-        const response = await axios.get('http://10.100.111.2:8675/parking/visitor/plan-dashboard/detail-list', {
+        const response = await axios.get('http://localhost:8675/parking/visitor/plan-dashboard/detail-list', {
           params: requestParams
         });
         

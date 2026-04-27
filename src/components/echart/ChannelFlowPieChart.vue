@@ -2,7 +2,7 @@
   <div class="chart-container">
     <div class="chart-header">
       <div class="header-left">
-        <h3>📊 {{ showDetail ? (channelType === 'entry' ? '进口通道进车数量' : '出口通道出车数量') : '进出口车辆统计' }}</h3>
+        <h3>📊 {{ showDetail ? (channelType === 'entry' ? '当日进口通道进车数量' : '当日出口通道出车数量') : '当日进出口车辆统计' }}</h3>
         <div class="chart-subtitle" v-if="showDetail">
           {{ channelType === 'entry' ? '各进口通道进车数量详情' : '各出口通道出车数量详情' }}
         </div>

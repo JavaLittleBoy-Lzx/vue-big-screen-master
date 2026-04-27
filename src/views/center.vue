@@ -1,10 +1,10 @@
 <template>
   <div class="camera-monitor">
-    <!-- 时间选择器 -->
+    <!-- 顶部控制栏 -->
     <div class="time-selector">
       <div class="time-options">
-        <button v-for="option in timeOptions" :key="option.value" @click="selectedTimeRange = option.value"
-          :class="['time-btn', { active: selectedTimeRange === option.value }]">
+        <button v-for="option in timeOptions" :key="option.value" @click="tabTimeRange = option.value"
+          :class="['time-btn', { active: tabTimeRange === option.value }]">
           {{ option.label }}
         </button>
       </div>
@@ -28,6 +28,16 @@
             </div>
           </div>
         </transition>
+      </div>
+      
+      <!-- 时间范围选择器 -->
+      <div class="time-range-selector">
+        <select v-model="selectedTimeRange" @change="onTimeRangeChange" class="time-select">
+          <option value="today">今日</option>
+          <option value="week">本周</option>
+          <option value="month">本月</option>
+          <option value="year">本年度</option>
+        </select>
       </div>
     </div>
 
@@ -1227,14 +1237,16 @@ export default {
   },
   data() {
     return {
-      // 时间选择器
-      selectedTimeRange: 'daily',
+      // Tab时间选择器（左侧按钮）
+      tabTimeRange: 'daily',
       timeOptions: [
         { label: '今日', value: 'daily' },
         { label: '本周', value: 'weekly' },
         { label: '本月', value: 'monthly' },
         { label: '今年', value: 'yearly' }
       ],
+      // 下拉时间选择器（右侧select）- 用于向父组件emit
+      selectedTimeRange: 'today',
       // 通道名称列表（重命名以避免与props中的channels冲突）
       channelNames: ['1号门', '2号门', '3号门', '4号门', '5号门', '6号门'],
       // 车辆照片数据（不设置默认数据，避免显示错误的默认照片）
@@ -1672,12 +1684,12 @@ export default {
     },
     // 当前选择的时间段标签
     currentTimeLabel() {
-      const option = this.timeOptions.find(opt => opt.value === this.selectedTimeRange);
+      const option = this.timeOptions.find(opt => opt.value === this.tabTimeRange);
       return option ? option.label : '今日';
     },
     // 当前时间段的车行数据
     currentVehicleData() {
-      return this.vehicleData[this.selectedTimeRange] || this.vehicleData.daily;
+      return this.vehicleData[this.tabTimeRange] || this.vehicleData.daily;
     },
     // 动态车行数据计算属性
     currentVehicleEntry() {
@@ -1697,7 +1709,7 @@ export default {
     },
     // 当前时间段的人脸数据
     currentFaceData() {
-      return this.faceData[this.selectedTimeRange] || this.faceData.daily;
+      return this.faceData[this.tabTimeRange] || this.faceData.daily;
     },
     // 动态人脸数据计算属性
     currentFaceEntry() {
@@ -1935,7 +1947,7 @@ export default {
     // 🔥 大数据量相关计算属性
     isLargeDataModal() {
       return (this.detailType && this.detailType.includes('face') && 
-              (this.selectedTimeRange === 'monthly' || this.selectedTimeRange === 'yearly')) ||
+              (this.tabTimeRange === 'monthly' || this.tabTimeRange === 'yearly')) ||
               this.detailType.includes('-summary');
     },
 
@@ -2043,6 +2055,13 @@ export default {
     this.stopModalRealTimeUpdate();
   },
   methods: {
+    // 时间范围变化处理
+    onTimeRangeChange() {
+      console.log('Center组件：时间范围切换为:', this.selectedTimeRange);
+      // 通过 emit 向父组件传递时间范围变化
+      this.$emit('time-range-change', this.selectedTimeRange);
+    },
+    
     // 创建占位数据确保表格能滚动
     createPlaceholderData() {
       const placeholders = [];
@@ -2259,7 +2278,7 @@ export default {
         'weekly': '本周',
         'monthly': '本月',
         'yearly': '本年'
-      }[this.selectedTimeRange] || '该时间段';
+      }[this.tabTimeRange] || '该时间段';
       
       // 支持车辆和人脸数据类型
       const typeTextMap = {
@@ -2286,9 +2305,9 @@ export default {
       
       // 如果没有统计数据，使用保守估算
       if (estimatedCount === 0) {
-        if (this.selectedTimeRange === 'monthly') {
+        if (this.tabTimeRange === 'monthly') {
           estimatedCount = 30 * 500;
-        } else if (this.selectedTimeRange === 'yearly') {
+        } else if (this.tabTimeRange === 'yearly') {
           estimatedCount = 365 * 500;
         } else {
           estimatedCount = 1000;
@@ -2301,7 +2320,7 @@ export default {
         `${estimatedCount}`;
       
       console.log('📊 [数据量估算]', {
-        timeRange: this.selectedTimeRange,
+        timeRange: this.tabTimeRange,
         type: type,
         estimatedCount: estimatedCount,
         stats: stats
@@ -2489,7 +2508,7 @@ export default {
      */
     async loadFaceMonitorData() {
       try {
-        const response = await axios.get('http://10.100.111.2:8675/parking/face-monitor/realtime', {
+        const response = await axios.get('http://localhost:8675/parking/face-monitor/realtime', {
           params: { limit: 50 }
         });
 
@@ -2702,8 +2721,8 @@ export default {
     async loadFaceHeatmapData() {
       try {
         console.log('🚀 [人脸热力图] 开始加载数据...');
-        const response = await axios.get('http://10.100.111.2:8675/parking/face-monitor/heatmap', {
-          params: { timeRange: this.selectedTimeRange || 'today' }
+        const response = await axios.get('http://localhost:8675/parking/face-monitor/heatmap', {
+          params: { timeRange: this.tabTimeRange || 'daily' }
         });
 
         console.log('📡 [人脸热力图] 后端响应:', response.data);
@@ -2920,10 +2939,10 @@ export default {
      */
     async loadStatisticsData() {
       try {
-        console.log('🚀 [统计数据] 开始加载...', this.selectedTimeRange);
+        console.log('🚀 [统计数据] 开始加载...', this.tabTimeRange);
 
         // 根据时间范围计算开始和结束时间
-        const { startDate, endDate } = this.getDateRange(this.selectedTimeRange);
+        const { startDate, endDate } = this.getDateRange(this.tabTimeRange);
         console.log('📅 [时间范围]', startDate, '-', endDate);
 
         // 并行加载所有数据
@@ -2939,21 +2958,21 @@ export default {
         const onSite = vehicleEntry - vehicleExit;
 
         // 更新数据
-        this.vehicleData[this.selectedTimeRange] = {
+        this.vehicleData[this.tabTimeRange] = {
           entry: vehicleEntry,
           exit: vehicleExit,
           current: onSite > 0 ? onSite : 0,
           violation: violations
         };
 
-        this.faceData[this.selectedTimeRange] = {
+        this.faceData[this.tabTimeRange] = {
           entry: faceEntry,
           exit: faceExit
         };
 
         console.log('✅ [统计数据] 加载完成:', {
-          vehicle: this.vehicleData[this.selectedTimeRange],
-          face: this.faceData[this.selectedTimeRange]
+          vehicle: this.vehicleData[this.tabTimeRange],
+          face: this.faceData[this.tabTimeRange]
         });
       } catch (error) {
         console.error('❌ [统计数据] 加载失败:', error);
@@ -3017,7 +3036,7 @@ export default {
      */
     async loadVehicleEntry(startDate, endDate) {
       try {
-        const response = await axios.get('http://10.100.111.2:8675/parking/statistics/vehicle-entry', {
+        const response = await axios.get('http://localhost:8675/parking/statistics/vehicle-entry', {
           params: { startDate, endDate }
         });
         // 处理双层data嵌套：response.data.data.data
@@ -3035,7 +3054,7 @@ export default {
      */
     async loadVehicleExit(startDate, endDate) {
       try {
-        const response = await axios.get('http://10.100.111.2:8675/parking/statistics/vehicle-exit', {
+        const response = await axios.get('http://localhost:8675/parking/statistics/vehicle-exit', {
           params: { startDate, endDate }
         });
         // 处理双层data嵌套：response.data.data.data
@@ -3053,7 +3072,7 @@ export default {
      */
     async loadFaceEntry(startDate, endDate) {
       try {
-        const response = await axios.get('http://10.100.111.2:8675/parking/statistics/face-entry', {
+        const response = await axios.get('http://localhost:8675/parking/statistics/face-entry', {
           params: { startDate, endDate }
         });
         // 处理双层data嵌套：response.data.data.data
@@ -3070,7 +3089,7 @@ export default {
      */
     async loadFaceExit(startDate, endDate) {
       try {
-        const response = await axios.get('http://10.100.111.2:8675/parking/statistics/face-exit', {
+        const response = await axios.get('http://localhost:8675/parking/statistics/face-exit', {
           params: { startDate, endDate }
         });
         // 处理双层data嵌套：response.data.data.data
@@ -3506,21 +3525,10 @@ export default {
     getPlateType(plateNumber, record = {}) {
       if (!plateNumber) return 'traditional';
       const plate = plateNumber.trim().toUpperCase();
-      
-      // 🔍 调试信息：检查车牌颜色字段
-      if (record && (record.carColor || record.enter_car_license_color || record.exit_car_license_color || record.plateColor)) {
-        console.log('🎨 [车牌样式] 车牌颜色调试:', {
-          plate: plateNumber,
-          carColor: record.carColor,
-          enter_car_license_color: record.enter_car_license_color,
-          exit_car_license_color: record.exit_car_license_color,
-          plateColor: record.plateColor,
-          enter_car_type: record.enter_car_type
-        });
-      }
+    
 
 
-      // 首先按车牌位数判断
+      // 首先按车牌位数判
       if (plate.length === 8) {
         // 8位车牌 = 新能源车（绿牌
         return 'new-energy';
@@ -3567,12 +3575,8 @@ export default {
               result = 'traditional';
               break;
           }
-          console.log(`🎨 [车牌样式] ${plate} - 颜色: ${licenseColor} → 样式: ${result}`);
           return result;
         }
-
-        // 降级逻辑：没有颜色信息的7位车牌
-        console.log(`⚠️ [车牌样式] ${plate} - 无颜色信息，使用降级逻辑`);
         
         // 判断警车
         if (/警$/.test(plate)) {
@@ -4498,7 +4502,7 @@ export default {
         const now = new Date();
         const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
         
-        const response = await axios.get('http://10.100.111.2:8675/parking/face-monitor/list', {
+        const response = await axios.get('http://localhost:8675/parking/face-monitor/list', {
           params: {
             page: 1,
             size: 50000,  // 使用size参数而不是limit
@@ -4683,7 +4687,7 @@ export default {
         const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
         
         // 调用车辆数据API
-        const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getLatestVehicleRecords', {
+        const response = await axios.get('http://localhost:8675/parking/nefuData/getLatestVehicleRecords', {
           params: {
             limit: 10000,  // 获取大量数据以覆盖所有通道
             startTime: this.formatDateTime(threeDaysAgo),
@@ -5228,7 +5232,7 @@ export default {
         const now = new Date();
         const oneHourAgo = new Date(now.getTime() - 1 * 60 * 60 * 1000);
         
-        const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getLatestVehicleRecords', {
+        const response = await axios.get('http://localhost:8675/parking/nefuData/getLatestVehicleRecords', {
           params: {
             limit: 1000,  // 减少数据量
             startTime: this.formatDateTime(oneHourAgo),
@@ -5511,7 +5515,7 @@ export default {
  * @param {boolean} preserveFilters - 是否保留筛选条件（车牌号等），默认为false
  */
     async openDetailModal(type, preserveFilters = false) {
-      console.log('🔍 [详情弹窗] 打开详情弹窗:', type, '保留筛选:', preserveFilters, '当前时间范围:', this.selectedTimeRange);
+      console.log('🔍 [详情弹窗] 打开详情弹窗:', type, '保留筛选:', preserveFilters, '当前时间范围:', this.tabTimeRange);
       
       // 🔥 大数据量处理：检查是否需要特殊处理
       const isLargeDataRange = this.isLargeDataTimeRange(type);
@@ -5762,7 +5766,7 @@ export default {
           dynamicSize = Math.min(Math.max(currentStats.current, 3000), 8000);
         } else if (this.detailType === 'face-entry' && currentFaceStats.entry) {
           // 人脸数据根据时间范围限制
-          const isLargeTimeRange = this.selectedTimeRange === 'monthly' || this.selectedTimeRange === 'yearly';
+          const isLargeTimeRange = this.tabTimeRange === 'monthly' || this.tabTimeRange === 'yearly';
           if (isLargeTimeRange) {
             dynamicSize = Math.min(this.detailPageSize || 1000, 2000); // 大时间范围限制到2000条以内
             console.log('⚠️ [大数据量限制] 人脸进场数据限制为', dynamicSize, '条');
@@ -5771,7 +5775,7 @@ export default {
           }
         } else if (this.detailType === 'face-exit' && currentFaceStats.exit) {
           // 人脸数据根据时间范围限制  
-          const isLargeTimeRange = this.selectedTimeRange === 'monthly' || this.selectedTimeRange === 'yearly';
+          const isLargeTimeRange = this.tabTimeRange === 'monthly' || this.tabTimeRange === 'yearly';
           if (isLargeTimeRange) {
             dynamicSize = Math.min(this.detailPageSize || 1000, 2000); // 大时间范围限制到2000条以内
             console.log('⚠️ [大数据量限制] 人脸出场数据限制为', dynamicSize, '条');
@@ -5863,7 +5867,7 @@ export default {
         } else if (this.detailType.includes('face')) {
           // 人脸数据
           const direction = this.detailType === 'face-entry' ? '进' : '出';
-          const apiUrl = 'http://10.100.111.2:8675/parking/face-monitor/list';
+          const apiUrl = 'http://localhost:8675/parking/face-monitor/list';
           response = await axios.get(apiUrl, {
             params: {
               ...params,
@@ -5872,14 +5876,14 @@ export default {
           });
         } else if (this.detailType === 'vehicle-onsite') {
           // 在场车辆：查询进场未出场的记录
-          const apiUrl = 'http://10.100.111.2:8675/parking/vehicle-records/onsite';
+          const apiUrl = 'http://localhost:8675/parking/vehicle-records/onsite';
           response = await axios.get(apiUrl, {
             params
           });
         } else {
           // 车辆进场/出场数据
           const table = this.detailType === 'vehicle-entry' ? 'report_car_in' : 'report_car_out';
-          const apiUrl = `http://10.100.111.2:8675/parking/vehicle-records/${table}`;
+          const apiUrl = `http://localhost:8675/parking/vehicle-records/${table}`;
           response = await axios.get(apiUrl, {
             params
           });
@@ -5994,19 +5998,19 @@ export default {
           });
         } else if (this.detailType.includes('face')) {
           const direction = this.detailType === 'face-entry' ? '进' : '出';
-          response = await axios.get('http://10.100.111.2:8675/parking/face-monitor/list', {
+          response = await axios.get('http://localhost:8675/parking/face-monitor/list', {
             params: {
               ...params,
               direction
             }
           });
         } else if (this.detailType === 'vehicle-onsite') {
-          response = await axios.get('http://10.100.111.2:8675/parking/vehicle-records/onsite', {
+          response = await axios.get('http://localhost:8675/parking/vehicle-records/onsite', {
             params
           });
         } else {
           const table = this.detailType === 'vehicle-entry' ? 'report_car_in' : 'report_car_out';
-          response = await axios.get(`http://10.100.111.2:8675/parking/vehicle-records/${table}`, {
+          response = await axios.get(`http://localhost:8675/parking/vehicle-records/${table}`, {
             params
           });
         }
@@ -6460,7 +6464,7 @@ export default {
     resetDetailFilters() {
       // 根据上方Tab的时间范围设置默认值
       let defaultTimeRange = 'today';
-      switch (this.selectedTimeRange) {
+      switch (this.tabTimeRange) {
         case 'daily':
           defaultTimeRange = 'today';
           break;
@@ -6588,9 +6592,7 @@ export default {
         default:
           // 默认根据车牌长度判断
           resultClass = plateNumber.length === 8 ? 'plate-new-energy' : 'plate-blue';
-      }
-      
-      // console.log(`🎯 [车牌样式] ${plateNumber} - 最终颜色: ${licenseColor || '未识别'}, 样式类: ${resultClass}`);
+      } 
       return resultClass;
     },
 
@@ -6870,7 +6872,7 @@ export default {
     async loadVehicleFrequencyRanking(startDate, endDate) {
       try {
         // 获取进场记录
-        const entryResponse = await axios.get('http://10.100.111.2:8675/parking/vehicle-records/report_car_in', {
+        const entryResponse = await axios.get('http://localhost:8675/parking/vehicle-records/report_car_in', {
           params: { startDate, endDate, page: 1, size: 100000 }
         });
         console.log('🔄 [车辆排行榜] 进场API响应:', entryResponse);
@@ -6881,7 +6883,7 @@ export default {
         });
         
         // 获取出场记录
-        const exitResponse = await axios.get('http://10.100.111.2:8675/parking/vehicle-records/report_car_out', {
+        const exitResponse = await axios.get('http://localhost:8675/parking/vehicle-records/report_car_out', {
           params: { startDate, endDate, page: 1, size: 100000 }
         });
         console.log('🔄 [车辆排行榜] 出场API响应:', exitResponse);
@@ -7056,12 +7058,12 @@ export default {
     async loadChannelFrequencyRanking(startDate, endDate) {
       try {
         // 获取进场记录
-        const entryResponse = await axios.get('http://10.100.111.2:8675/parking/vehicle-records/report_car_in', {
+        const entryResponse = await axios.get('http://localhost:8675/parking/vehicle-records/report_car_in', {
           params: { startDate, endDate, page: 1, size: 100000 }
         });
         console.log('🔄 [通道频次] 获取进场记录:', entryResponse.data);
         // 获取出场记录
-        const exitResponse = await axios.get('http://10.100.111.2:8675/parking/vehicle-records/report_car_out', {
+        const exitResponse = await axios.get('http://localhost:8675/parking/vehicle-records/report_car_out', {
           params: { startDate, endDate, page: 1, size: 100000 }
         });
         console.log('🔄 [通道频次] 获取出场记录:', exitResponse);
@@ -7274,10 +7276,10 @@ export default {
 
   // 监听数据变化
   watch: {
-    // 监听时间范围变化
-    selectedTimeRange: {
+    // 监听Tab时间范围变化（左侧按钮）- 控制当前页面数据
+    tabTimeRange: {
       handler(newVal) {
-        console.log('⏰ [时间范围切换]', newVal);
+        console.log('⏰ [Tab时间范围切换]', newVal);
         this.loadStatisticsData();
         this.loadFaceHeatmapData();
       }
@@ -7479,6 +7481,8 @@ export default {
   margin-bottom: 20px;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 20px;
 
   .time-options {
     display: flex;
@@ -7537,11 +7541,38 @@ export default {
       }
     }
   }
+  
+  // 时间范围选择器（select下拉框）
+  .time-range-selector {
+    .time-select {
+      padding: 6px 14px;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      border-radius: 8px;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+      outline: none;
+      
+      &:hover {
+        border-color: #3b82f6;
+        color: #3b82f6;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+      }
+      
+      &:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+    }
+  }
 
   // 数据分析菜单
   .analysis-menu {
     position: relative;
-    margin-left: 20px;
 
     .analysis-btn {
       display: flex;

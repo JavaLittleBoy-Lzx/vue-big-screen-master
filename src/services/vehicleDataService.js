@@ -52,7 +52,7 @@ class VehicleDataService {
       
       // 调用后端API查询最新记录
       console.log('🚗 [车辆记录] 开始查询最新记录...');
-      const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getLatestVehicleRecords', {
+      const response = await axios.get('http://localhost:8675/parking/nefuData/getLatestVehicleRecords', {
         params: {
           limit: limit,
           lastTime: lastTime
@@ -83,7 +83,7 @@ class VehicleDataService {
     try {
       // console.log('🔄 查询增量车辆记录...', { lastTime, limit });
       
-      const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getLatestVehicleRecords', {
+      const response = await axios.get('http://localhost:8675/parking/nefuData/getLatestVehicleRecords', {
         params: {
           limit: limit,
           lastTime: lastTime
@@ -108,7 +108,7 @@ class VehicleDataService {
    */
   async getLatestCarInRecords(limit = 50, lastTime = null) {
     try {
-      const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getLatestCarInRecords', {
+      const response = await axios.get('http://localhost:8675/parking/nefuData/getLatestCarInRecords', {
         params: {
           limit: limit,
           lastTime: lastTime
@@ -131,7 +131,7 @@ class VehicleDataService {
    */
   async getLatestCarOutRecords(limit = 50, lastTime = null) {
     try {
-      const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getLatestCarOutRecords', {
+      const response = await axios.get('http://localhost:8675/parking/nefuData/getLatestCarOutRecords', {
         params: {
           limit: limit,
           lastTime: lastTime
@@ -231,7 +231,7 @@ class VehicleDataService {
     try {
       console.log('🚙 正在获取在场车辆数据...');
       // 调用获取在场车辆的接口
-      const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getParkOnSiteCar', {
+      const response = await axios.get('http://localhost:8675/parking/nefuData/getParkOnSiteCar', {
         params: {
           parkCodeList: 'PARK001', // 停车场编码，需要根据实际情况调整
           enterTimeFrom: this.getTodayStartTime(),
@@ -324,7 +324,7 @@ class VehicleDataService {
    */
   async getRecentEntryData(startTime, endTime) {
     try {
-      const response = await axios.get('http://10.100.111.2:8675/parking/nefuData/getCarInList', {
+      const response = await axios.get('http://localhost:8675/parking/nefuData/getCarInList', {
         params: {
           parkCode: 'PARK001',
           isPresence: '1',
@@ -763,7 +763,7 @@ class VehicleDataService {
     try {
       console.log('💰 [收费分析] 开始查询...', { timeRange, parkName });
       
-      const response = await this.http.post('http://10.100.111.2:8675/parking/analysis/vehicle-flow/revenue-analysis', {
+      const response = await this.http.post('http://localhost:8675/parking/analysis/vehicle-flow/revenue-analysis', {
         parkName: parkName,
         timeRange: timeRange
       });
@@ -822,7 +822,7 @@ class VehicleDataService {
     try {
       console.log('🔥 [车辆热力图] 开始查询...', { timeRange, parkName });
       
-      const response = await this.http.post('http://10.100.111.2:8675/parking/analysis/vehicle-flow/heatmap-data', {
+      const response = await this.http.post('http://localhost:8675/parking/analysis/vehicle-flow/heatmap-data', {
         parkName: parkName,
         timeRange: timeRange
       });

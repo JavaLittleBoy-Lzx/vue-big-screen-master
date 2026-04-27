@@ -25,7 +25,7 @@ export const API_CONFIG = {
 // 根据环境设置不同的API地址
 if (process.env.NODE_ENV === 'production') {
   // 生产环境使用完整URL
-  API_CONFIG.BACKEND_URL = process.env.VUE_APP_BACKEND_URL || 'http://10.100.111.2:8675';
+  API_CONFIG.BACKEND_URL = process.env.VUE_APP_BACKEND_URL || 'http://localhost:8675';
 } else if (process.env.NODE_ENV === 'development') {
   // 开发环境使用代理路径，避免CORS问题
   API_CONFIG.BACKEND_URL = process.env.VUE_APP_BACKEND_URL || '/api';

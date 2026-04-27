@@ -1,0 +1,27 @@
+/* 隐私保护弹窗全局样式 - 强制顶部显示 */
+.privacy-confirm-dialog.top-position {
+  position: fixed !important;
+  top: 80px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 9999 !important;
+  margin: 0 !important;
+}
+
+/* 覆盖Element UI默认样式 */
+.el-message-box-wrapper .privacy-confirm-dialog {
+  position: fixed !important;
+  top: 80px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 9999 !important;
+}
+
+/* 弹窗容器样式 */
+.privacy-confirm-dialog .el-message-box {
+  position: relative !important;
+  top: 0 !important;
+  left: 0 !important;
+  transform: none !important;
+  margin: 0 !important;
+}

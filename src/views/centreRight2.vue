@@ -3,7 +3,7 @@
     <div class="revenue-container">
       <div class="chart-header">
         <div class="header-left">
-          <h3>📊 收费分析</h3>
+          <h3>📊 当日收费分析</h3>
         </div>
       </div>
       <div class="d-flex jc-center body-box">

@@ -18,8 +18,8 @@ module.exports = {
     proxy: {
       // 代理所有以 /api 开头的请求到本地后端
       '/api': {
-        target: 'http://10.100.111.2:8675', // 后端服务地址
-        //  target: 'http://www.xuerparking.cn:8675', // 后端服务地址
+        target: 'http://localhost:8675', // 后端服务地址
+        //  target: 'http://localhost:8675', // 后端服务地址
         changeOrigin: true,
         secure: false,
         logLevel: 'silent', // 完全禁用日志

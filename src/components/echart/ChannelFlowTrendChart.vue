@@ -48,6 +48,7 @@ export default {
     }
   },
   mounted() {
+    // console.assert(this.$alert)
     this.initChart()
     window.addEventListener('resize', this.handleResize)
   },

@@ -1,7 +1,7 @@
 <template>
   <div class="visitor-vip-stacked-chart">
     <div class="chart-header">
-      <div class="title">📊 访客与校内车辆车辆进出统计分析</div>
+      <div class="title">📊 当日访客与校内车辆车辆进出统计分析</div>
     </div>
     
      <!-- 图例 -->

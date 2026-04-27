@@ -73,25 +73,25 @@ export default {
         radius = ["15%", "52%"];
         center = ["30%", "50%"];
         legendRight = 8;
-        fontSize = 10;
+        fontSize = 14;
       } else if (containerWidth < 400 || containerHeight < 300) {
         // 小容器
         radius = ["16%", "58%"];
         center = ["31%", "50%"];
         legendRight = 10;
-        fontSize = 10;
+        fontSize = 14;
       } else if (containerWidth >= 500 || containerHeight >= 400) {
         // 超大容器（2560×1600等）
         radius = ["18%", "65%"];
         center = ["34%", "50%"];
         legendRight = 15;
-        fontSize = 12;
+        fontSize = 16;
       } else {
         // 标准容器
         radius = ["18%", "62%"];
         center = ["33%", "50%"];
         legendRight = 12;
-        fontSize = 11;
+        fontSize = 15;
       }
       
       return { radius, center, legendRight, fontSize };

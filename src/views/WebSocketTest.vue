@@ -108,13 +108,13 @@ export default {
       // 获取当前WebSocket URL
       if (typeof window !== 'undefined') {
         const host = window.location.hostname;
-        if (host === 'localhost' || host === '127.0.0.1' || host === '10.100.111.2') {
-          return 'ws://10.100.111.2:8675/websocket/vehicle';
+        if (host === 'localhost' || host === '127.0.0.1' || host === 'localhost') {
+          return 'ws://localhost:8675/websocket/vehicle';
         } else {
           return `ws://${host}:8675/websocket/vehicle`;
         }
       }
-      return 'ws://10.100.111.2:8675/websocket/vehicle';
+      return 'ws://localhost:8675/websocket/vehicle';
     },
     
     setupEventListeners() {

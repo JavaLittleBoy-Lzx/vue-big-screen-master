@@ -160,7 +160,7 @@
 
 <script>
 import { getUserInfo, setUserInfo } from '@/utils/auth'
-import { changePasswordAPI } from '@/services/authService'
+import { changePasswordAPI, verifyOldPasswordAPI } from '@/services/authService'
 
 export default {
   name: 'UserProfile',
@@ -265,13 +265,21 @@ export default {
       }
     },
     
-    validateOldPassword() {
+    async validateOldPassword() {
       this.errors.oldPassword = ''
       if (!this.passwordForm.oldPassword) {
         this.errors.oldPassword = '请输入旧密码'
         return false
       }
-      return true
+      
+      // 实时验证旧密码是否正确
+      try {
+        await verifyOldPasswordAPI(this.passwordForm.oldPassword)
+        return true
+      } catch (error) {
+        this.errors.oldPassword = error.message || '旧密码错误'
+        return false
+      }
     },
     
     validateNewPassword() {
@@ -302,7 +310,7 @@ export default {
     
     async submitPasswordChange() {
       // 验证所有字段
-      const valid = this.validateOldPassword() && 
+      const valid = await this.validateOldPassword() && 
                    this.validateNewPassword() && 
                    this.validateConfirmPassword()
       

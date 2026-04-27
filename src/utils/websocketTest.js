@@ -90,11 +90,11 @@ export class WebSocketTest {
     const urls = [];
     
     // 生产环境地址
-    urls.push('ws://10.100.111.2:8675/websocket/vehicle');
+    urls.push('ws://localhost:8675/websocket/vehicle');
     
     // 本地开发环境
-    urls.push('ws://10.100.111.2:8675/websocket/vehicle');
-    urls.push('ws://10.100.111.2:8675/websocket/vehicle');
+    urls.push('ws://localhost:8675/websocket/vehicle');
+    urls.push('ws://localhost:8675/websocket/vehicle');
     
     // 如果配置了其他地址
     if (process.env.VUE_APP_WEBSOCKET_HOST) {

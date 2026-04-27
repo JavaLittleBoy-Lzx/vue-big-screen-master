@@ -289,7 +289,7 @@ export default {
     // 加载用户列表
     async loadUsers() {
       try {
-        const response = await axios.get('http://10.100.111.2:8675/api/users/list', {
+        const response = await axios.get('http://localhost:8675/api/users/list', {
           params: {
             keyword: this.searchKeyword
           }
@@ -387,13 +387,13 @@ export default {
               isNull: this.userForm.password === null,
               isUndefined: this.userForm.password === undefined
             })
-            response = await axios.post('http://10.100.111.2:8675/api/users/create', this.userForm)
+            response = await axios.post('http://localhost:8675/api/users/create', this.userForm)
           } else {
             // 编辑模式：移除password字段
             const updateData = { ...this.userForm }
             delete updateData.password
             console.log('📤 更新用户请求数据:', updateData)
-            response = await axios.put('http://10.100.111.2:8675/api/users/update', updateData)
+            response = await axios.put('http://localhost:8675/api/users/update', updateData)
           }
 
           if (response.data.code === '0') {
@@ -429,7 +429,7 @@ export default {
         if (!valid) return
 
         try {
-          const response = await axios.post('http://10.100.111.2:8675/api/users/reset-password', {
+          const response = await axios.post('http://localhost:8675/api/users/reset-password', {
             userId: this.selectedUser.id,
             newPassword: this.passwordForm.newPassword
           })
@@ -454,7 +454,7 @@ export default {
       const action = newStatus === 1 ? '启用' : '禁用'
 
       try {
-        const response = await axios.put('http://10.100.111.2:8675/api/users/update', {
+        const response = await axios.put('http://localhost:8675/api/users/update', {
           id: user.id,
           username: user.username,
           role: user.role,
@@ -486,7 +486,7 @@ export default {
         type: 'error'
       }).then(async () => {
         try {
-          const response = await axios.delete(`http://10.100.111.2:8675/api/users/delete/${user.id}`)
+          const response = await axios.delete(`http://localhost:8675/api/users/delete/${user.id}`)
 
           if (response.data.code === '0') {
             this.$message.success('删除成功')

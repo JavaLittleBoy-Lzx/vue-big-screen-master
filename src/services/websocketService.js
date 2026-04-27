@@ -100,7 +100,7 @@ class WebSocketService {
     if (baseUrl.startsWith('/api')) {
       // 开发环境使用代理，需要指向实际的后端地址
       // 优先使用环境变量，如果没有则使用默认的本地地址
-      const backendHost = process.env.VUE_APP_WEBSOCKET_HOST || '10.100.111.2:8675';
+      const backendHost = process.env.VUE_APP_WEBSOCKET_HOST || 'localhost:8675';
       baseUrl = `ws://${backendHost}`;
     } else if (baseUrl.startsWith('http://')) {
       // 生产环境直接替换协议
@@ -121,11 +121,11 @@ class WebSocketService {
     const urls = [];
     
     // 生产环境地址
-    urls.push('ws://10.100.111.2:8675/websocket/vehicle');
+    urls.push('ws://localhost:8675/websocket/vehicle');
     
     // 本地地址
-    urls.push('ws://10.100.111.2:8675/websocket/vehicle');
-    urls.push('ws://10.100.111.2:8675/websocket/vehicle');
+    urls.push('ws://localhost:8675/websocket/vehicle');
+    urls.push('ws://localhost:8675/websocket/vehicle');
     
     // 从当前页面获取主机信息
     const currentHost = window.location.hostname;

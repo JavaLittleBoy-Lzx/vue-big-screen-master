@@ -1,7 +1,7 @@
 // 进出口车辆数据服务
 class VehicleFlowDataService {
   constructor() {
-    this.baseUrl = process.env.VUE_APP_API_BASE_URL || 'http://10.100.111.2:8675';
+    this.baseUrl = process.env.VUE_APP_API_BASE_URL || 'http://localhost:8675';
   }
 
   // 获取进出口车辆统计数据

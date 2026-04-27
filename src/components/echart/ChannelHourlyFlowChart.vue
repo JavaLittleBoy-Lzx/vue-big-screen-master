@@ -29,10 +29,10 @@ export default {
       // 生成24小时流量分布数据
       const hours = []
       const flowData = []
-      
+
       for (let i = 0; i < 24; i++) {
         hours.push(i + ':00')
-        
+
         // 模拟一天中的流量变化模式
         let flow = 0
         if (i >= 6 && i <= 8) {
@@ -51,10 +51,8 @@ export default {
           // 深夜和凌晨
           flow = 5 + Math.random() * 8
         }
-        
         flowData.push(Math.round(flow))
       }
-      
       return { hours, flowData }
     }
   },
@@ -71,9 +69,9 @@ export default {
   methods: {
     initChart() {
       if (!this.$refs.chartContainer) return
-      
+
       this.chart = echarts.init(this.$refs.chartContainer)
-      
+
       const option = {
         tooltip: {
           trigger: 'axis',
@@ -153,10 +151,10 @@ export default {
           }
         ]
       }
-      
+
       this.chart.setOption(option)
     },
-    
+
     handleResize() {
       if (this.chart) {
         this.chart.resize()
@@ -189,23 +187,23 @@ export default {
   border: 1px solid #1e3a8a;
   border-radius: 12px;
   padding: 20px;
-  
+
   .chart-header {
     margin-bottom: 20px;
-    
+
     .chart-title {
       margin: 0 0 5px 0;
       font-size: 16px;
       font-weight: bold;
       color: #ffffff;
     }
-    
+
     .chart-subtitle {
       font-size: 12px;
       color: #94a3b8;
     }
   }
-  
+
   .chart-container {
     flex: 1;
     min-height: 200px;

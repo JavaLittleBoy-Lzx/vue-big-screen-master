@@ -243,7 +243,7 @@ export default {
         console.log('🚀 [人流分析] 开始请求API，时间范围:', this.timeRange);
         
         // 调用人脸数据分析API
-        const response = await axios.get('http://10.100.111.2:8675/parking/analysis/face/channel-statistics', {
+        const response = await axios.get('http://localhost:8675/parking/analysis/face/channel-statistics', {
           params: {
             timeRange: this.timeRange
           }
@@ -717,7 +717,7 @@ export default {
       
       try {
         // 调用后端API获取该通道的详细数据
-        const response = await axios.get('http://10.100.111.2:8675/parking/analysis/face/channel-detail', {
+        const response = await axios.get('http://localhost:8675/parking/analysis/face/channel-detail', {
           params: {
             channelName: channel.name,
             timeRange: this.timeRange
@@ -1351,9 +1351,9 @@ export default {
   .modal-content {
     background: linear-gradient(135deg, rgba(9, 14, 24, 0.95), rgba(4, 7, 14, 0.96));
     border-radius: 12px;
-    width: 85%;
-    max-width: 1000px;
-    max-height: 85vh;
+    width: 92%;
+    max-width: 1400px;
+    max-height: 90vh;
     overflow-y: auto;
     border: 1px solid rgba(0, 229, 255, 0.25);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55), 0 0 24px rgba(139, 92, 246, 0.25);
@@ -1487,7 +1487,7 @@ export default {
         
         .detail-chart {
           width: 100%;
-          height: 200px;
+          height: 280px;
         }
       }
     }

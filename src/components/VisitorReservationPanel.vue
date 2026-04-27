@@ -74,7 +74,7 @@ export default {
         this.isLoading = true;
         console.log('🚀 [访客预约分类] 开始加载数据，时间范围:', this.timeRange);
         
-        const response = await axios.get('http://10.100.111.2:8675/parking/visitor/reservation-category', {
+        const response = await axios.get('http://localhost:8675/parking/visitor/reservation-category', {
           params: {
             timeRange: this.timeRange
           }

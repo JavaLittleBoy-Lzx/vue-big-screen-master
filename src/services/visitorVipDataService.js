@@ -1,7 +1,7 @@
 // 访客和VIP车辆数据服务
 class VisitorVipDataService {
   constructor() {
-    this.baseUrl = process.env.VUE_APP_API_BASE_URL || 'http://10.100.111.2:8675';
+    this.baseUrl = process.env.VUE_APP_API_BASE_URL || 'http://localhost:8675';
   }
 
   // 获取访客和VIP车辆进出数据

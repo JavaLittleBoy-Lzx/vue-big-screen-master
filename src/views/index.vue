@@ -12,6 +12,15 @@
               <span class="bell-icon" :class="{ 'has-alerts': reservationAlerts.length > 0 }">🔔</span>
               <span v-if="reservationAlerts.length > 0" class="alert-badge">{{ reservationAlerts.length }}</span>
             </div>
+            <!-- 添加关注对象按钮 -->
+            <div class="add-watch-btn" @click="showAddWatchForm = true" title="添加关注对象">
+              <span class="add-icon">➕</span>
+            </div>
+            <!-- 🌙 夜间学生出校提醒按钮 -->
+            <div class="night-alert-btn" @click="toggleNightAlertList" title="夜间学生出校提醒">
+              <span class="night-alert-icon">🌙</span>
+              <span v-if="nightAlertUnreadCount > 0" class="night-alert-badge">{{ nightAlertUnreadCount > 99 ? '99+' : nightAlertUnreadCount }}</span>
+            </div>
           </div>
           
           <div class="header-right">
@@ -24,14 +33,10 @@
               <!-- 用户菜单 -->
               <transition name="fade">
                 <div v-if="showUserMenu" class="user-menu" @click.stop>
-                  <!-- <div class="menu-item" @click="handleUserProfile">
-                    <span class="menu-icon">👤</span>
-                    <span>个人信息</span>
-                  </div> -->
-                  <!-- <div class="menu-item" @click="handleChangePassword">
+                  <div class="menu-item" @click="handleChangePassword">
                     <span class="menu-icon">🔒</span>
                     <span>修改密码</span>
-                  </div> -->
+                  </div>
                   <div class="menu-divider"></div>
                   <div class="menu-item logout" @click="handleLogout">
                     <span class="menu-icon">🚪</span>
@@ -39,16 +44,6 @@
                   </div>
                 </div>
               </transition>
-            </div>
-            
-            <!-- 时间选择器 -->
-            <div class="time-selector">
-              <select v-model="selectedTimeRange" @change="onTimeRangeChange" class="time-select">
-                <option value="today">今日</option>
-                <option value="week">本周</option>
-                <option value="month">本月</option>
-                <option value="year">本年度</option>
-              </select>
             </div>
             
             <div class="datetime-info">
@@ -103,6 +98,7 @@
                     :heatmapHourLabels="heatmapHourLabels"
                     :heatmapMinHour="heatmapMinHour"
                     :heatmapMaxHour="heatmapMaxHour"
+                    @time-range-change="handleTimeRangeChange"
                   />
                 </div>
                 
@@ -249,7 +245,7 @@
         <div class="alert-header">
           <div class="alert-title">
             <span class="title-icon">🔔</span>
-            <span class="title-text">预约进场提醒</span>
+            <span class="title-text">预约进出场提醒</span>
             <span class="alert-count">{{ reservationAlerts.length }}条</span>
           </div>
           <div class="alert-actions">
@@ -273,43 +269,62 @@
         <div class="alert-body">
           <!-- Tab切换 -->
           <div class="alert-tabs">
-            <div class="tab" :class="{ active: !showHistory }" @click="showHistory = false">
+            <div class="tab" :class="{ active: currentAlertTab === 'pending' }" @click="switchAlertTab('pending')">
               <span>未确认 ({{ reservationAlerts.length }})</span>
             </div>
-            <div class="tab" :class="{ active: showHistory }" @click="showHistory = true">
+            <div class="tab" :class="{ active: currentAlertTab === 'history' }" @click="switchAlertTab('history')">
               <span>历史记录 ({{ reservationAlertsHistory.length }})</span>
+            </div>
+            <div class="tab" :class="{ active: currentAlertTab === 'focus' }" @click="switchAlertTab('focus')">
+              <span>👁️ 关注管理 ({{ focusPendingCount }})</span>
             </div>
           </div>
           
           <!-- 未确认提醒列表 -->
-          <div v-if="!showHistory" class="alert-list">
-            <div v-if="reservationAlerts.length === 0" class="empty-history">
+          <div v-if="currentAlertTab === 'pending'" class="alert-list">
+            <!-- 类型筛选器 -->
+            <div class="alert-filter">
+              <button class="filter-btn" :class="{ active: pendingFilter === 'all' }" @click="pendingFilter = 'all'">
+                全部 ({{ reservationAlerts.length }})
+              </button>
+              <button class="filter-btn" :class="{ active: pendingFilter === 'vehicle' }" @click="pendingFilter = 'vehicle'">
+                🚗 车辆 ({{ filteredPendingVehicles.length }})
+              </button>
+              <button class="filter-btn" :class="{ active: pendingFilter === 'person' }" @click="pendingFilter = 'person'">
+                👤 人脸 ({{ filteredPendingPersons.length }})
+              </button>
+            </div>
+            
+            <div v-if="filteredPendingAlerts.length === 0" class="empty-history">
               <span class="empty-icon">🔔</span>
               <p>暂无未确认提醒</p>
             </div>
-          <div v-for="(alert, index) in reservationAlerts" 
+          <div v-for="(alert, index) in filteredPendingAlerts" 
                :key="alert.timestamp + '_' + index" 
                class="alert-item-compact"
                :class="{ 'expanded': alert.isExpanded }">
             
             <!-- 紧凑的一行显示 -->
-            <div class="compact-row" @click="toggleAlertExpand(index)">
+            <div class="compact-row" @click="toggleAlertExpand(alert)">
               <div class="main-info">
                 <!-- 类型图标 -->
                 <span class="type-badge" :class="alert.type">
-                  {{ alert.type === 'vehicle' ? '🚗' : '👤' }}
+                  {{ alert.type === 'vehicle' ? '🚗' : (alert.type === 'night_student' ? '🌙' : '👤') }}
                 </span>
                 <!-- 车牌号或人名 -->
-                <span v-if="alert.type === 'vehicle'" 
+                <span v-if="alert.type === 'vehicle'"
                       class="plate-number"
                       :class="getPlateType(alert.plateNumber, alert)">
                   {{ alert.plateNumber || '未知车牌' }}
+                </span>
+                <span v-else-if="alert.type === 'night_student'" class="person-name night-student">
+                  {{ alert.personName || '未知学生' }}
                 </span>
                 <span v-else class="person-name">
                   {{ alert.visitorName || '未知访客' }}
                 </span>
                 <!-- 通道名称 -->
-                <span class="channel-name">{{ alert.channel || '未知通道' }}</span>
+                <span class="channel-name">{{ alert.channelName || alert.channel || '未知通道' }}</span>
                 <!-- 时间 -->
                 <span class="time-display">{{ getTimeAgo(alert.timestamp) }}</span>
               </div>
@@ -321,13 +336,13 @@
             
             <!-- 展开后的详细内容 -->
             <div class="detail-content" v-if="alert.isExpanded">
-              
+
               <!-- 进场照片 -->
               <div class="photo-section">
-                <div class="photo-wrapper" @click="previewImage(alert.imageUrl)">
-                  <img v-if="alert.imageUrl" 
-                       :src="alert.imageUrl" 
-                       :alt="alert.type === 'vehicle' ? '进场照片' : '人脸照片'"
+                <div class="photo-wrapper" @click="previewImage(alert.imageUrl || alert.photoUrl)">
+                  <img v-if="alert.imageUrl || alert.photoUrl"
+                       :src="alert.imageUrl || alert.photoUrl"
+                       :alt="alert.type === 'vehicle' ? '进场照片' : (alert.type === 'night_student' ? '学生照片' : '人脸照片')"
                        @error="handleImageError">
                   <div v-else class="no-photo">
                     <span>📷</span>
@@ -335,11 +350,36 @@
                   </div>
                 </div>
               </div>
-              
+
               <!-- 详细信息 -->
               <div class="info-grid">
+                <!-- 夜间学生提醒信息 -->
+                <div class="info-block" v-if="alert.type === 'night_student'">
+                  <div class="block-title">🌙 夜间出校信息</div>
+                  <div class="info-row">
+                    <span class="label">学生姓名：</span>
+                    <span class="value">{{ alert.personName || '未知' }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">性别：</span>
+                    <span class="value">{{ alert.gender || '未知' }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">学院：</span>
+                    <span class="value">{{ alert.college || '未知' }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">出口通道：</span>
+                    <span class="value">{{ alert.channelName || '未知' }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">出校时间：</span>
+                    <span class="value">{{ alert.eventTime || '未知' }}</span>
+                  </div>
+                </div>
+
                 <!-- 预约信息 -->
-                <div class="info-block">
+                <div class="info-block" v-else>
                   <div class="block-title">预约信息</div>
                   <div class="info-row">
                     <span class="label">预约人：</span>
@@ -356,6 +396,10 @@
                   <div class="info-row" v-if="alert.reservationStartTime">
                     <span class="label">预约时段：</span>
                     <span class="value">{{ formatTimeRange(alert.reservationStartTime, alert.reservationEndTime) }}</span>
+                  </div>
+                  <div class="info-row" v-if="alert.vipType">
+                    <span class="label">VIP类型：</span>
+                    <span class="value vip-type">{{ alert.vipType }}</span>
                   </div>
                 </div>
                 
@@ -400,18 +444,31 @@
           </div>
           
           <!-- 历史记录列表 -->
-          <div v-if="showHistory" class="alert-list history-list">
-            <div v-if="reservationAlertsHistory.length === 0" class="empty-history">
+          <div v-if="currentAlertTab === 'history'" class="alert-list history-list">
+            <!-- 类型筛选器 -->
+            <div class="alert-filter">
+              <button class="filter-btn" :class="{ active: historyFilter === 'all' }" @click="historyFilter = 'all'">
+                全部 ({{ reservationAlertsHistory.length }})
+              </button>
+              <button class="filter-btn" :class="{ active: historyFilter === 'vehicle' }" @click="historyFilter = 'vehicle'">
+                🚗 车辆 ({{ filteredHistoryVehicles.length }})
+              </button>
+              <button class="filter-btn" :class="{ active: historyFilter === 'person' }" @click="historyFilter = 'person'">
+                👤 人脸 ({{ filteredHistoryPersons.length }})
+              </button>
+            </div>
+            
+            <div v-if="filteredHistoryAlerts.length === 0" class="empty-history">
               <span class="empty-icon">📭</span>
               <p>暂无历史记录</p>
             </div>
-            <div v-for="(alert, index) in reservationAlertsHistory" 
+            <div v-for="(alert, index) in filteredHistoryAlerts" 
                  :key="alert.timestamp + '_history_' + index" 
                  class="alert-item-compact history-item"
                  :class="{ 'expanded': alert.isExpanded }">
               
               <!-- 紧凑的一行显示 -->
-              <div class="compact-row" @click="toggleHistoryAlertExpand(index)">
+              <div class="compact-row" @click="toggleHistoryAlertExpand(alert)">
                 <div class="main-info">
                   <!-- 类型图标 -->
                   <span class="type-badge" :class="alert.type">
@@ -477,6 +534,10 @@
                       <span class="label">预约时段：</span>
                       <span class="value">{{ formatTimeRange(alert.reservationStartTime, alert.reservationEndTime) }}</span>
                     </div>
+                    <div class="info-row" v-if="alert.vipType">
+                      <span class="label">VIP类型：</span>
+                      <span class="value vip-type">{{ alert.vipType }}</span>
+                    </div>
                   </div>
                   
                   <!-- 被访信息 -->
@@ -518,6 +579,13 @@
               
             </div>
           </div>
+          
+          <!-- 关注管理内容 -->
+          <div v-if="currentAlertTab === 'focus'" class="focus-management-content">
+            <FocusTrackingPanel 
+              :isEmbedded="true"
+              @update-count="updateFocusPendingCount" />
+          </div>
         </div>
         
       </div>
@@ -543,6 +611,346 @@
       </div>
     </transition>
     
+    <!-- 添加关注对象表单弹窗 -->
+    <AddWatchForm
+      v-if="showAddWatchForm"
+      @close="showAddWatchForm = false"
+    />
+
+    <!-- 🌙 夜间学生出校提醒面板 -->
+    <NightAlertPanel
+      v-if="showNightAlertPanel"
+      :viewMode="nightAlertViewMode"
+      @close="showNightAlertPanel = false"
+      @update-count="nightAlertUnreadCount = $event"
+    />
+
+    <!-- 🌙 夜间学生出校提醒列表小弹窗 -->
+    <transition name="modal-fade">
+      <div v-if="showNightAlertList" class="night-alert-list-popup">
+        <!-- 头部 -->
+        <div class="night-alert-header">
+          <div class="header-left">
+            <span class="header-icon">🌙</span>
+            <span class="header-title">夜间学生出校提醒</span>
+            <span class="alert-count" v-if="nightAlertUnreadCount > 0">{{ nightAlertUnreadCount }}</span>
+          </div>
+          <div class="header-actions">
+            <button class="btn-action" @click="openNightAlertConfig" title="设置">
+              <span>⚙️</span>
+            </button>
+            <button class="btn-action" @click="openNightAlertStats" title="统计">
+              <span>📊</span>
+            </button>
+            <button class="btn-close" @click="closeNightAlertList">×</button>
+          </div>
+        </div>
+
+        <!-- Tab切换 -->
+        <div class="night-alert-tabs">
+          <div class="tab" :class="{ active: currentNightAlertTab === 'pending' }" @click="switchNightAlertTab('pending')">
+            <span>未确认 ({{ nightAlertUnreadCount }})</span>
+          </div>
+          <div class="tab" :class="{ active: currentNightAlertTab === 'history' }" @click="switchNightAlertTab('history')">
+            <span>历史记录 ({{ nightAlertsHistory.length }})</span>
+          </div>
+        </div>
+
+        <!-- 筛选栏 -->
+        <div class="night-alert-filters">
+          <div class="filter-item search-filter">
+            <label>通道</label>
+            <div class="searchable-select" :class="{ open: nightChannelSelectOpen }">
+              <div class="select-trigger" @click="toggleNightChannelSelect">
+                <input
+                  type="text"
+                  v-model="nightFilterChannelInput"
+                  @focus="openNightChannelSelect"
+                  @blur="closeNightChannelSelect"
+                  @input="filterNightChannelOptions"
+                  placeholder="全部通道"
+                  class="filter-input"
+                />
+                <span class="select-arrow">&#9662;</span>
+              </div>
+              <div v-show="nightChannelSelectOpen" class="select-dropdown">
+                <div class="select-option default-option" :class="{ selected: !nightFilterChannel }" @mousedown.prevent="selectNightChannel('')">全部</div>
+                <div
+                  v-for="ch in filteredNightChannelOptions"
+                  :key="ch"
+                  class="select-option"
+                  :class="{ selected: nightFilterChannel === ch }"
+                  @mousedown.prevent="selectNightChannel(ch)"
+                >
+                  {{ ch }}
+                </div>
+                <div v-if="filteredNightChannelOptions.length === 0 && nightChannelOptions.length > 0" class="no-options">无匹配项</div>
+              </div>
+            </div>
+          </div>
+          <div class="filter-item">
+            <label>性别</label>
+            <select v-model="nightFilterGender" class="filter-select">
+              <option value="">全部</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+            </select>
+          </div>
+          <div class="filter-item search-filter">
+            <label>学院</label>
+            <div class="searchable-select" :class="{ open: nightCollegeSelectOpen }">
+              <div class="select-trigger" @click="toggleNightCollegeSelect">
+                <input
+                  type="text"
+                  v-model="nightFilterCollegeInput"
+                  @focus="openNightCollegeSelect"
+                  @blur="closeNightCollegeSelect"
+                  @input="filterNightCollegeOptions"
+                  placeholder="全部学院"
+                  class="filter-input"
+                />
+                <span class="select-arrow">&#9662;</span>
+              </div>
+              <div v-show="nightCollegeSelectOpen" class="select-dropdown">
+                <div class="select-option default-option" :class="{ selected: !nightFilterCollege }" @mousedown.prevent="selectNightCollege('')">全部</div>
+                <div
+                  v-for="c in filteredNightCollegeOptions"
+                  :key="c"
+                  class="select-option"
+                  :class="{ selected: nightFilterCollege === c }"
+                  @mousedown.prevent="selectNightCollege(c)"
+                >
+                  {{ c }}
+                </div>
+                <div v-if="filteredNightCollegeOptions.length === 0 && nightCollegeOptions.length > 0" class="no-options">无匹配项</div>
+              </div>
+            </div>
+          </div>
+          <button class="btn-query" @click="queryNightAlerts">查询</button>
+          <button v-if="nightFilterChannel || nightFilterGender || nightFilterCollege" class="btn-clear-filter" @click="clearNightFilters" title="清除筛选">
+            <span>重置</span>
+          </button>
+        </div>
+
+        <!-- 提醒列表 -->
+        <div class="night-alert-list" v-if="currentNightAlertTab === 'pending'">
+          <div v-if="nightAlerts.length === 0" class="empty-state">
+            <span class="empty-icon">📭</span>
+            <p>暂无未确认记录</p>
+          </div>
+          <div
+            v-else
+            v-for="alert in nightAlerts"
+            :key="alert.id"
+            class="night-alert-item"
+            :class="{ unread: !alert.isRead, expanded: nightAlertExpandedId === alert.id }"
+            @click="toggleNightAlertExpand(alert.id)"
+          >
+            <!-- 折叠状态 -->
+            <div class="item-compact" v-if="nightAlertExpandedId !== alert.id">
+              <span class="item-icon">🌙</span>
+              <span class="person-name">{{ alert.personName }}</span>
+              <span class="college">{{ alert.college }}</span>
+              <span class="channel">{{ alert.channelName }}</span>
+              <span class="time">{{ formatNightAlertTime(alert.eventTime) }}</span>
+              <span class="expand-icon">▼</span>
+            </div>
+            <!-- 展开状态 -->
+            <div class="item-expanded" v-else>
+              <div class="item-main">
+                <div class="item-photo">
+                  <img v-if="alert.photoUrl" :src="alert.photoUrl" alt="照片" />
+                  <div v-else class="photo-placeholder">
+                    <span>{{ alert.personName?.charAt(0) || '?' }}</span>
+                  </div>
+                </div>
+                <div class="item-info">
+                  <div class="info-row">
+                    <span class="label">姓名：</span>
+                    <span class="value">{{ alert.personName }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">性别：</span>
+                    <span class="value">{{ alert.gender }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">学院：</span>
+                    <span class="value">{{ alert.college }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">通道：</span>
+                    <span class="value">{{ alert.channelName }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">时间：</span>
+                    <span class="value">{{ formatNightAlertDateTime(alert.eventTime) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="item-actions">
+                <button class="btn-confirm" @click.stop="confirmNightAlert(alert.id)">
+                  ✓ 确认
+                </button>
+                <button class="btn-confirm-all" @click.stop="confirmAllNightAlerts">
+                  全部已读
+                </button>
+              </div>
+              <span class="collapse-icon" @click.stop="nightAlertExpandedId = null">▲</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 历史记录列表 -->
+        <div class="night-alert-list" v-if="currentNightAlertTab === 'history'">
+          <div v-if="nightAlertsHistory.length === 0" class="empty-state">
+            <span class="empty-icon">📭</span>
+            <p>暂无历史记录</p>
+          </div>
+          <div
+            v-else
+            v-for="alert in nightAlertsHistory"
+            :key="alert.id"
+            class="night-alert-item history"
+            :class="{ expanded: nightAlertExpandedId === alert.id }"
+            @click="toggleNightAlertExpand(alert.id)"
+          >
+            <div class="item-compact">
+              <span class="item-icon">🌙</span>
+              <span class="person-name">{{ alert.personName }}</span>
+              <span class="college">{{ alert.college }}</span>
+              <span class="channel">{{ alert.channelName }}</span>
+              <span class="time">{{ formatNightAlertTime(alert.eventTime) }}</span>
+              <span class="status-badge read">已读</span>
+              <span class="expand-icon">▼</span>
+            </div>
+            <div v-if="nightAlertExpandedId === alert.id" class="item-expanded">
+              <div class="item-main">
+                <div class="item-photo">
+                  <img v-if="alert.photoUrl" :src="alert.photoUrl" alt="照片" />
+                  <div v-else class="photo-placeholder">{{ alert.personName?.charAt(0) || '?' }}</div>
+                </div>
+                <div class="item-info">
+                  <div class="info-row">
+                    <span class="label">姓名</span>
+                    <span class="value">{{ alert.personName }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">学院</span>
+                    <span class="value">{{ alert.college }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">性别</span>
+                    <span class="value">{{ alert.gender }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">通道</span>
+                    <span class="value">{{ alert.channelName }}</span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">时间</span>
+                    <span class="value">{{ formatNightAlertDateTime(alert.eventTime) }}</span>
+                  </div>
+                </div>
+              </div>
+              <span class="collapse-icon" @click.stop="toggleNightAlertExpand(alert.id)">▲</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部 -->
+        <div class="night-alert-footer" v-if="currentNightAlertTab === 'pending' && nightAlerts.length > 0">
+          <span class="record-count">共 {{ nightAlerts.length }} 条记录</span>
+          <button class="btn-confirm-all-bottom" @click="confirmAllNightAlerts">全部已读</button>
+        </div>
+      </div>
+    </transition>
+
+    <!-- 修改密码弹窗 -->
+    <transition name="fade">
+      <div v-if="showPasswordModal" class="modal-overlay" @click="closePasswordModal">
+        <div class="modal-content password-modal" @click.stop>
+          <div class="modal-header">
+            <h3>修改密码</h3>
+            <button class="close-btn" @click="closePasswordModal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>旧密码</label>
+              <div class="password-input-wrapper">
+                <input
+                  :type="showOldPassword ? 'text' : 'password'"
+                  v-model="passwordForm.oldPassword"
+                  placeholder="请输入旧密码"
+                  @blur="validateOldPassword"
+                  :class="{ 'error': passwordErrors.oldPassword }"
+                />
+                <button 
+                  type="button"
+                  class="toggle-password-btn" 
+                  @click="showOldPassword = !showOldPassword"
+                  :title="showOldPassword ? '隐藏密码' : '显示密码'"
+                >
+                  <span v-if="showOldPassword">👁️</span>
+                  <span v-else>👁️‍🗨️</span>
+                </button>
+              </div>
+              <span v-if="passwordErrors.oldPassword" class="error-text">{{ passwordErrors.oldPassword }}</span>
+            </div>
+            <div class="form-group">
+              <label>新密码</label>
+              <div class="password-input-wrapper">
+                <input
+                  :type="showNewPassword ? 'text' : 'password'"
+                  v-model="passwordForm.newPassword"
+                  placeholder="至少6个字符"
+                  @blur="validateNewPassword"
+                  :class="{ 'error': passwordErrors.newPassword }"
+                />
+                <button 
+                  type="button"
+                  class="toggle-password-btn" 
+                  @click="showNewPassword = !showNewPassword"
+                  :title="showNewPassword ? '隐藏密码' : '显示密码'"
+                >
+                  <span v-if="showNewPassword">👁️</span>
+                  <span v-else>👁️‍🗨️</span>
+                </button>
+              </div>
+              <span v-if="passwordErrors.newPassword" class="error-text">{{ passwordErrors.newPassword }}</span>
+            </div>
+            <div class="form-group">
+              <label>确认密码</label>
+              <div class="password-input-wrapper">
+                <input
+                  :type="showConfirmPassword ? 'text' : 'password'"
+                  v-model="passwordForm.confirmPassword"
+                  placeholder="再次输入新密码"
+                  @blur="validateConfirmPassword"
+                  :class="{ 'error': passwordErrors.confirmPassword }"
+                />
+                <button 
+                  type="button"
+                  class="toggle-password-btn" 
+                  @click="showConfirmPassword = !showConfirmPassword"
+                  :title="showConfirmPassword ? '隐藏密码' : '显示密码'"
+                >
+                  <span v-if="showConfirmPassword">👁️</span>
+                  <span v-else>👁️‍🗨️</span>
+                </button>
+              </div>
+              <span v-if="passwordErrors.confirmPassword" class="error-text">{{ passwordErrors.confirmPassword }}</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-success" @click="submitPasswordChange" :disabled="isPasswordSubmitting">
+              {{ isPasswordSubmitting ? '提交中...' : '确认修改' }}
+            </button>
+            <button class="btn btn-cancel" @click="closePasswordModal">取消</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
   </div>
 </template>
 
@@ -553,6 +961,9 @@ import ChannelComparisonLineChart from "@/components/echart/ChannelComparisonLin
 import ChannelUtilizationChart from "@/components/echart/ChannelUtilizationChart.vue";
 import ModalChannelPieChart from "@/components/echart/ModalChannelPieChart.vue";
 import VisitorVipAnalysisModal from "@/components/VisitorVipAnalysisModal.vue";
+import FocusTrackingPanel from "@/components/FocusTrackingPanel.vue";
+import AddWatchForm from "@/components/AddWatchForm.vue";
+import NightAlertPanel from "@/components/NightAlertPanel.vue";
 import centreLeft2 from "./centreLeft2";
 import centreRight2 from "./centreRight2";
 import center from "./center";
@@ -572,7 +983,9 @@ import { parkingDataService } from "@/services/parkingDataService";
 import { vehicleFlowDataService } from "@/services/vehicleFlowDataService.js";
 import { vehicleDataService } from "@/services/vehicleDataService.js";
 import { getUserInfo, clearAuth } from "@/utils/auth";
-import { logoutAPI } from "@/services/authService";
+import { logoutAPI, changePasswordAPI, verifyOldPasswordAPI } from "@/services/authService";
+import { focusAlertService } from "@/services/focusAlertService";
+import nightAlertService from "@/services/nightAlertService";
 
 export default {
   data() {
@@ -582,6 +995,24 @@ export default {
       // 用户信息
       userInfo: null,
       showUserMenu: false,
+
+      // 修改密码弹窗
+      showPasswordModal: false,
+      passwordForm: {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      },
+      passwordErrors: {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      },
+      isPasswordSubmitting: false,
+      // 控制密码显示/隐藏
+      showOldPassword: false,
+      showNewPassword: false,
+      showConfirmPassword: false,
       
       // 基础信息
       parkingLotName: "XX智慧停车场",
@@ -721,6 +1152,10 @@ export default {
       reservationAlerts: [],        // 提醒队列
       reservationAlertsHistory: [], // 历史提醒（已确认的）
       showHistory: false,            // 是否显示历史记录
+      currentAlertTab: 'pending',    // 当前Tab: pending-未确认, history-历史记录, focus-关注管理
+      pendingFilter: 'all',          // 未确认提醒筛选: all-全部, vehicle-车辆, person-人脸
+      historyFilter: 'all',          // 历史记录筛选: all-全部, vehicle-车辆, person-人脸
+      focusPendingCount: 0,          // 关注对象的未确认提醒数量
       isMinimized: false,            // 是否最小化
       maxHistorySize: 1000,            // 最大历史记录数
      
@@ -742,7 +1177,39 @@ export default {
       },
       
       // 音频上下文
-      audioContext: null
+      audioContext: null,
+      
+      // 添加关注表单
+      showAddWatchForm: false,
+
+      // 🌙 夜间学生出校提醒相关
+      showNightAlertPanel: false,       // 控制统计/配置全屏弹窗
+      showNightAlertList: false,         // 控制列表小弹窗
+      nightAlertUnreadCount: 0,          // 未读计数
+      nightAlerts: [],                   // 夜间提醒列表（筛选后）
+      nightAlertsAllRecords: [],         // 所有原始记录
+      nightAlertsHistory: [],            // 历史记录
+      currentNightAlertTab: 'pending',   // 当前Tab: pending/history
+      nightAlertFilter: 'all',            // 筛选: all/male/female
+      nightAlertViewMode: 'stats',       // stats-统计面板 / config-配置面板
+
+      // 夜间提醒筛选条件
+      nightFilterChannel: '',
+      nightFilterGender: '',
+      nightFilterCollege: '',
+      nightStartDate: '',
+      nightEndDate: '',
+      nightChannelOptions: [],
+      nightCollegeOptions: [],
+      nightAlertExpandedId: null,         // 当前展开的提醒ID
+
+      // 夜间提醒可搜索下拉
+      nightFilterChannelInput: '',
+      nightChannelSelectOpen: false,
+      filteredNightChannelOptions: [],
+      nightFilterCollegeInput: '',
+      nightCollegeSelectOpen: false,
+      filteredNightCollegeOptions: [],
     };
   },
   components: {
@@ -752,6 +1219,9 @@ export default {
     ChannelUtilizationChart,
     ModalChannelPieChart,
     VisitorVipAnalysisModal,
+    FocusTrackingPanel,
+    AddWatchForm,
+    NightAlertPanel,
     centreLeft2,
     centreRight2,
     center,
@@ -772,26 +1242,75 @@ export default {
     // 当前时间段的数据
     currentData() {
       return this.timeRangeData[this.selectedTimeRange] || this.timeRangeData.today;
+    },
+    
+    // 未确认提醒 - 车辆列表
+    filteredPendingVehicles() {
+      return this.reservationAlerts.filter(alert => alert.type === 'vehicle');
+    },
+    
+    // 未确认提醒 - 人脸列表
+    filteredPendingPersons() {
+      return this.reservationAlerts.filter(alert => alert.type === 'person');
+    },
+    
+    // 未确认提醒 - 根据筛选器过滤
+    filteredPendingAlerts() {
+      if (this.pendingFilter === 'vehicle') {
+        return this.filteredPendingVehicles;
+      } else if (this.pendingFilter === 'person') {
+        return this.filteredPendingPersons;
+      }
+      return this.reservationAlerts;
+    },
+    
+    // 历史记录 - 车辆列表
+    filteredHistoryVehicles() {
+      return this.reservationAlertsHistory.filter(alert => alert.type === 'vehicle');
+    },
+    
+    // 历史记录 - 人脸列表
+    filteredHistoryPersons() {
+      return this.reservationAlertsHistory.filter(alert => alert.type === 'person');
+    },
+    
+    // 历史记录 - 根据筛选器过滤
+    filteredHistoryAlerts() {
+      if (this.historyFilter === 'vehicle') {
+        return this.filteredHistoryVehicles;
+      } else if (this.historyFilter === 'person') {
+        return this.filteredHistoryPersons;
+      }
+      return this.reservationAlertsHistory;
     }
   },
   mounted() {
     // 加载用户信息
     this.loadUserInfo();
-    
+
     // 原有初始化
     this.initData();
     this.startDataRefresh();
     this.startTimeUpdate();
-    
-    // 🔔 新增：从本地存储恢复提醒数据
-    this.loadAlertsFromLocalStorage();
-    
+
+    // 🌙 从本地存储恢复夜间提醒未读数（优先恢复，防止WebSocket消息覆盖）
+    this.loadNightAlertUnreadCountFromLocalStorage();
+
+    // 🌙 从本地存储恢复夜间提醒数据
+    this.loadNightAlertsFromLocalStorage();
+
+    // 🌙 从API获取夜间提醒未读数（确保badge显示最新值）
+    this.loadNightAlertUnreadCountFromAPI();
+
+    // 🔔 新增：从数据库加载提醒数据
+    this.loadAlertsFromDatabase();
+
     // 🔔 新增：初始化WebSocket
     this.initWebSocket();
-    
+
     // 🔔 新增：初始化音频上下文（用户交互后）
     this.initAudioContext();
-    
+
     // 点击外部关闭用户菜单
     document.addEventListener('click', this.closeUserMenu);
   },
@@ -846,23 +1365,144 @@ export default {
     // 个人信息
     handleUserProfile() {
       this.showUserMenu = false;
-      this.$router.push('/user-profile');
+      this.showPasswordModal = true;
     },
-    
+
     // 修改密码
     handleChangePassword() {
       this.showUserMenu = false;
-      this.$router.push('/user-profile');
+      this.showPasswordModal = true;
+    },
+
+    // 关闭修改密码弹窗
+    closePasswordModal() {
+      this.showPasswordModal = false;
+      this.passwordForm = {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      };
+      this.passwordErrors = {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      };
+      // 重置密码显示状态
+      this.showOldPassword = false;
+      this.showNewPassword = false;
+      this.showConfirmPassword = false;
+    },
+
+    // 验证旧密码
+    async validateOldPassword() {
+      if (!this.passwordForm.oldPassword) {
+        this.passwordErrors.oldPassword = '请输入旧密码';
+        return false;
+      }
+      
+      // 实时验证旧密码是否正确
+      try {
+        await verifyOldPasswordAPI(this.passwordForm.oldPassword);
+        this.passwordErrors.oldPassword = '';
+        return true;
+      } catch (error) {
+        this.passwordErrors.oldPassword = error.message || '旧密码错误';
+        return false;
+      }
+    },
+
+    // 验证新密码
+    validateNewPassword() {
+      if (!this.passwordForm.newPassword) {
+        this.passwordErrors.newPassword = '请输入新密码';
+        return false;
+      }
+      if (this.passwordForm.newPassword.length < 6) {
+        this.passwordErrors.newPassword = '新密码至少6个字符';
+        return false;
+      }
+      this.passwordErrors.newPassword = '';
+      return true;
+    },
+
+    // 验证确认密码
+    validateConfirmPassword() {
+      if (!this.passwordForm.confirmPassword) {
+        this.passwordErrors.confirmPassword = '请再次输入新密码';
+        return false;
+      }
+      if (this.passwordForm.confirmPassword !== this.passwordForm.newPassword) {
+        this.passwordErrors.confirmPassword = '两次密码输入不一致';
+        return false;
+      }
+      this.passwordErrors.confirmPassword = '';
+      return true;
+    },
+
+    // 提交密码修改
+    async submitPasswordChange() {
+      const v1 = await this.validateOldPassword();
+      const v2 = this.validateNewPassword();
+      const v3 = this.validateConfirmPassword();
+
+      if (!v1 || !v2 || !v3) {
+        return;
+      }
+
+      // 使用 Element UI 的 MessageBox 确认
+      try {
+        await this.$confirm('确定要修改密码吗？', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning',
+          customClass: 'password-confirm-dialog',
+          zIndex: 10000  // 设置更高的z-index，确保在密码弹窗之上
+        });
+      } catch {
+        return; // 用户取消
+      }
+
+      this.isPasswordSubmitting = true;
+      try {
+        await changePasswordAPI({
+          oldPassword: this.passwordForm.oldPassword,
+          newPassword: this.passwordForm.newPassword
+        });
+
+        // 先关闭弹窗再显示消息
+        this.closePasswordModal();
+        this.$message.success('密码修改成功，请重新登录');
+        this.handleLogout();
+      } catch (error) {
+        console.error('修改密码失败:', error);
+        // 优先使用后端返回的 msg 字段
+        let errorMsg = error.message;
+        if (!errorMsg && error.response?.data) {
+          errorMsg = error.response.data.msg || error.response.data.message || '修改密码失败，请稍后重试';
+        }
+        if (!errorMsg) {
+          errorMsg = '修改密码失败，请稍后重试';
+        }
+        this.$message.error(errorMsg);
+      } finally {
+        this.isPasswordSubmitting = false;
+      }
     },
     
     // 退出登录
     async handleLogout() {
       this.showUserMenu = false;
-      
-      if (!confirm('确定要退出登录吗？')) {
-        return;
+
+      try {
+        await this.$confirm('确定要退出登录吗？', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        });
+      } catch {
+        return; // 用户取消
       }
-      
+
       try {
         // 调用登出API
         await logoutAPI();
@@ -882,7 +1522,17 @@ export default {
       }
     },
     
-    // 时间范围变化处理
+    // 处理来自center组件的时间范围变化
+    handleTimeRangeChange(timeRange) {
+      // center组件的下拉选择器已经使用正确的格式 (today/week/month/year)
+      // 直接赋值即可
+      this.selectedTimeRange = timeRange;
+      console.log('接收到center组件时间范围变化:', timeRange);
+      // 刷新数据
+      this.refreshDataByTimeRange();
+    },
+    
+    // 时间范围变化处理（保留用于其他可能的调用）
     onTimeRangeChange() {
       console.log('时间范围切换为:', this.selectedTimeRange);
       // 这里可以添加数据刷新逻辑
@@ -1367,8 +2017,8 @@ export default {
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         // 修复：直接连接到后端服务器的地址和端口
-        const wsUrl = `${protocol}//10.100.111.2:8675/websocket/vehicle`;
-        
+        // const wsUrl = `${protocol}//localhost:8675/websocket/vehicle`;
+        const wsUrl = `${protocol}//localhost:8675/websocket/vehicle`;
         console.log('🔌 正在连接WebSocket:', wsUrl);
         
         this.websocket = new WebSocket(wsUrl);
@@ -1395,6 +2045,41 @@ export default {
                 allKeys: Object.keys(data)
               });
               this.handleReservationAlert(data);
+            }
+            
+            // 🔔 处理关注提醒
+            if (data.type === 'focusAlert') {
+              console.log('🔔 [关注提醒] 收到提醒:', {
+                alertType: data.alertType,
+                eventType: data.eventType,
+                watchValue: data.watchValue,
+                channelName: data.channelName
+              });
+              this.handleFocusAlert(data);
+            }
+
+            // 🌙 处理夜间学生出校提醒 - 添加到夜间提醒列表
+            if (data.type === 'nightStudentAlert') {
+              console.log('🌙 [夜间提醒] 收到提醒:', data);
+              const alert = {
+                id: data.id,
+                type: 'night_student',
+                personName: data.personName || '未知学生',
+                gender: data.gender || '',
+                college: data.college || '',
+                channelName: data.channelName || '未知通道',
+                eventTime: data.eventTime,
+                photoUrl: data.photoUrl || '',
+                timestamp: Date.now(),
+                isRead: false
+              };
+              // 添加到列表
+              this.nightAlerts.unshift(alert);
+              this.nightAlertsAllRecords.unshift(alert);
+              this.nightAlertUnreadCount++;
+              this.saveNightAlertUnreadCountToLocalStorage();
+              this.playSoundAlert({ type: 'night_student' });
+              console.log('🌙 [夜间提醒] 添加成功，当前未读:', this.nightAlertUnreadCount);
             }
           } catch (e) {
             console.error('❌ WebSocket消息解析失败:', e);
@@ -1472,6 +2157,446 @@ export default {
       console.log('🔊 准备播放音效提示...');
       this.playSoundAlert(alert);
       console.log('✅ handleReservationAlert 方法执行完成');
+    },
+    
+    /**
+     * 处理关注提醒
+     */
+    handleFocusAlert(data) {
+      console.log('🔔 [关注提醒] 开始处理提醒:', data);
+      
+      // 转换为统一的提醒格式
+      const alert = {
+        type: data.alertType === 'vehicle' ? 'vehicle' : 'person',
+        alertType: 'focus_alert',
+        timestamp: data.timestamp || Date.now(),
+        eventType: data.eventType, // entry 或 exit
+        
+        // 车辆信息
+        plateNumber: data.alertType === 'vehicle' ? data.watchValue : null,
+        
+        // 人员信息（访客基本信息）
+        personName: data.personName || null,
+        idCard: data.alertType === 'person' ? data.watchValue : null,
+        department: data.department || null,
+        phoneNo: data.phoneNo || null,
+        
+        // 进出场信息
+        channelName: data.channelName,
+        eventTime: data.eventTime,
+        photoUrl: data.photoUrl,
+        
+        // 预约信息
+        reservation_person: data.reservationPerson,
+        reservation_phone: data.reservationPhone,
+        reservation_reason: data.reservationReason,
+        reservation_time_range: data.reservationTimeRange,
+        
+        // 访客详细信息
+        visitor_pass_name: data.visitorPassName,
+        visitor_vip_type: data.visitorVipType,
+        visitor_park_name: data.visitorParkName,
+        visitor_reservation_time_range: data.visitorReservationTimeRange,
+        
+        // 备注
+        remark: data.remark,
+        
+        // 提醒ID
+        alertId: data.alertId,
+        
+        // UI状态
+        isExpanded: false
+      };
+      
+      console.log('✅ 转换后的提醒对象:', alert);
+      console.log('📋 预约信息:', {
+        person: alert.reservation_person,
+        phone: alert.reservation_phone,
+        reason: alert.reservation_reason,
+        timeRange: alert.reservation_time_range
+      });
+      
+      // 添加到队列
+      this.reservationAlerts.unshift(alert);
+      if (this.reservationAlerts.length > 1000) {
+        this.reservationAlerts = this.reservationAlerts.slice(0, 1000);
+      }
+      
+      // 保存到本地
+      this.saveAlertsToLocalStorage();
+      
+      // 🔊 播放声音提醒
+      this.playSoundAlert(alert);
+      
+      console.log('✅ 关注提醒处理完成');
+    },
+
+    /**
+     * 🌙 判断事件是否属于"今天夜间"（昨晚22:00到今早06:00）
+     * 夜间时间定义：22:00 - 06:00（次日）
+     * 注意：eventTime 是 ISO 格式字符串，需要直接解析避免时区偏移
+     */
+    isTodayNightEvent(eventTime) {
+      if (!eventTime) return false;
+
+      // 直接解析日期时间字符串，避免时区偏移问题（兼容 T 和空格分隔）
+      const match = eventTime.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+      if (!match) return false;
+
+      const [, year, month, day, hour, minute, second] = match;
+      const eventDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute), parseInt(second));
+
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      // 计算昨天的日期（用于夜间的开始）
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      // 今天夜间的开始：昨晚22:00
+      const nightStart = new Date(yesterday);
+      nightStart.setHours(22, 0, 0, 0);
+
+      // 今天夜间的结束：今早06:00
+      const nightEnd = new Date(now);
+      nightEnd.setHours(6, 0, 0, 0);
+
+      // 如果当前时间是22:00之后，今晚的夜间的开始是今天22:00，结束是明天06:00
+      if (currentHour >= 22) {
+        nightStart.setDate(now.getDate());
+        nightStart.setHours(22, 0, 0, 0);
+        nightEnd.setDate(now.getDate() + 1);
+        nightEnd.setHours(6, 0, 0, 0);
+      }
+
+      return eventDate >= nightStart && eventDate <= nightEnd;
+    },
+
+    // ==================== 🌙 夜间学生出校提醒相关方法 ====================
+
+    /**
+     * 🌙 切换夜间提醒列表弹窗
+     */
+    toggleNightAlertList() {
+      console.log('🌙 toggleNightAlertList 被点击, 当前showNightAlertList=', this.showNightAlertList);
+      if (this.showNightAlertList) {
+        this.showNightAlertList = false;
+        console.log('🌙 关闭小弹窗');
+      } else {
+        this.showNightAlertPanel = false;
+        this.showNightAlertList = true;
+        this.currentNightAlertTab = 'pending';
+        console.log('🌙 打开小弹窗, showNightAlertList=', this.showNightAlertList);
+        this.loadNightAlertRecords();
+        this.loadNightAlertFilters();
+      }
+    },
+
+    /**
+     * 🌙 关闭夜间提醒列表弹窗
+     */
+    closeNightAlertList() {
+      this.showNightAlertList = false;
+    },
+
+    /**
+     * 🌙 打开统计全屏弹窗
+     */
+    openNightAlertStats() {
+      this.showNightAlertList = false;
+      this.showNightAlertPanel = true;
+      this.nightAlertViewMode = 'stats';
+    },
+
+    /**
+     * 🌙 打开配置面板
+     */
+    openNightAlertConfig() {
+      this.showNightAlertList = false;
+      this.showNightAlertPanel = true;
+      this.nightAlertViewMode = 'config';
+    },
+
+    /**
+     * 🌙 关闭所有夜间提醒弹窗
+     */
+    closeNightAlertAll() {
+      this.showNightAlertList = false;
+      this.showNightAlertPanel = false;
+    },
+
+    /**
+     * 🌙 切换Tab
+     */
+    switchNightAlertTab(tab) {
+      this.currentNightAlertTab = tab;
+      this.nightAlertExpandedId = null;
+    },
+
+    /**
+     * 🌙 展开/收起提醒
+     */
+    toggleNightAlertExpand(alertId) {
+      if (this.nightAlertExpandedId === alertId) {
+        this.nightAlertExpandedId = null;
+      } else {
+        this.nightAlertExpandedId = alertId;
+      }
+    },
+
+    /**
+     * 🌙 加载夜间提醒记录
+     */
+    async loadNightAlertRecords() {
+      try {
+        const params = {
+          pageNum: 1,
+          pageSize: 200
+        };
+        if (this.nightFilterChannel) params.channelName = this.nightFilterChannel;
+        if (this.nightFilterGender) params.gender = this.nightFilterGender;
+        if (this.nightFilterCollege) params.college = this.nightFilterCollege;
+
+        const response = await nightAlertService.getRecords(params);
+        const result = response.data;
+
+        if (result.code === 200 || result.code === '0') {
+          const data = result.data || {};
+          const records = (data.records || []).map(r => ({
+            ...r,
+            isRead: r.isRead === 1 || r.isRead === true
+          }));
+          this.nightAlerts = records.filter(r => !r.isRead);
+          this.nightAlertsHistory = records.filter(r => r.isRead);
+          this.saveNightAlertsToLocalStorage();
+          this.nightAlertUnreadCount = this.nightAlerts.length;
+          this.saveNightAlertUnreadCountToLocalStorage();
+          console.log('🌙 [夜间提醒] 记录加载成功, 未读:', this.nightAlerts.length, '已读:', this.nightAlertsHistory.length);
+        }
+      } catch (error) {
+        console.error('❌ [夜间提醒] 加载记录失败', error);
+      }
+    },
+
+    /**
+     * 🌙 加载筛选选项
+     */
+    async loadNightAlertFilters() {
+      try {
+        const [channelsRes, collegesRes] = await Promise.all([
+          nightAlertService.getChannels(),
+          nightAlertService.getColleges()
+        ]);
+
+        if (channelsRes.data.code === 200 || channelsRes.data.code === '0') {
+          this.nightChannelOptions = channelsRes.data.data?.channels || [];
+        }
+        if (collegesRes.data.code === 200 || collegesRes.data.code === '0') {
+          this.nightCollegeOptions = collegesRes.data.data?.colleges || [];
+        }
+      } catch (error) {
+        console.error('❌ [夜间提醒] 加载筛选选项失败', error);
+      }
+    },
+
+    /**
+     * 🌙 查询按钮点击
+     */
+    queryNightAlerts() {
+      this.loadNightAlertRecords();
+    },
+
+    /**
+     * 🌙 清除筛选条件
+     */
+    clearNightFilters() {
+      this.nightFilterChannel = '';
+      this.nightFilterCollege = '';
+      this.nightFilterGender = '';
+      this.nightFilterChannelInput = '';
+      this.nightFilterCollegeInput = '';
+    },
+
+    toggleNightChannelSelect() {
+      if (this.nightChannelSelectOpen) {
+        this.nightChannelSelectOpen = false;
+      } else {
+        this.openNightChannelSelect();
+      }
+    },
+
+    openNightChannelSelect() {
+      this.nightChannelSelectOpen = true;
+      this.filteredNightChannelOptions = [...this.nightChannelOptions];
+    },
+
+    closeNightChannelSelect() {
+      setTimeout(() => {
+        this.nightChannelSelectOpen = false;
+      }, 200);
+    },
+
+    filterNightChannelOptions() {
+      const keyword = this.nightFilterChannelInput.toLowerCase();
+      this.filteredNightChannelOptions = this.nightChannelOptions.filter(ch =>
+        ch.toLowerCase().includes(keyword)
+      );
+    },
+
+    selectNightChannel(ch) {
+      this.nightFilterChannel = ch;
+      this.nightFilterChannelInput = ch;
+      this.nightChannelSelectOpen = false;
+    },
+
+    toggleNightCollegeSelect() {
+      if (this.nightCollegeSelectOpen) {
+        this.nightCollegeSelectOpen = false;
+      } else {
+        this.openNightCollegeSelect();
+      }
+    },
+
+    openNightCollegeSelect() {
+      this.nightCollegeSelectOpen = true;
+      this.filteredNightCollegeOptions = [...this.nightCollegeOptions];
+    },
+
+    closeNightCollegeSelect() {
+      setTimeout(() => {
+        this.nightCollegeSelectOpen = false;
+      }, 200);
+    },
+
+    filterNightCollegeOptions() {
+      const keyword = this.nightFilterCollegeInput.toLowerCase();
+      this.filteredNightCollegeOptions = this.nightCollegeOptions.filter(c =>
+        c.toLowerCase().includes(keyword)
+      );
+    },
+
+    selectNightCollege(c) {
+      this.nightFilterCollege = c;
+      this.nightFilterCollegeInput = c;
+      this.nightCollegeSelectOpen = false;
+    },
+
+    /**
+     * 🌙 确认单条提醒
+     */
+    async confirmNightAlert(alertId) {
+      try {
+        await nightAlertService.markAsRead(alertId);
+        const index = this.nightAlerts.findIndex(a => a.id === alertId);
+        if (index !== -1) {
+          const alert = this.nightAlerts[index];
+          alert.isRead = true;
+          // 移到历史记录
+          this.nightAlertsHistory.unshift({
+            ...alert,
+            confirmedAt: new Date()
+          });
+          this.nightAlerts.splice(index, 1);
+          this.nightAlertUnreadCount = Math.max(0, this.nightAlertUnreadCount - 1);
+          this.saveNightAlertUnreadCountToLocalStorage();
+          this.saveNightAlertsToLocalStorage();
+        }
+        this.nightAlertExpandedId = null;
+        console.log('✅ [夜间提醒] 已确认:', alertId);
+      } catch (error) {
+        console.error('❌ [夜间提醒] 确认失败', error);
+      }
+    },
+
+    /**
+     * 🌙 全部标记已读
+     */
+    async confirmAllNightAlerts() {
+      try {
+        await nightAlertService.markAllAsRead();
+        this.nightAlerts.forEach(alert => {
+          alert.isRead = true;
+          this.nightAlertsHistory.unshift({
+            ...alert,
+            confirmedAt: new Date()
+          });
+        });
+        this.nightAlerts = [];
+        this.nightAlertUnreadCount = 0;
+        this.saveNightAlertUnreadCountToLocalStorage();
+        this.saveNightAlertsToLocalStorage();
+        this.nightAlertExpandedId = null;
+        console.log('✅ [夜间提醒] 全部已读');
+      } catch (error) {
+        console.error('❌ [夜间提醒] 全部已读失败', error);
+      }
+    },
+
+    /**
+     * 🌙 格式化时间（只显示时间部分）
+     */
+    formatNightAlertTime(time) {
+      if (!time) return '';
+      const match = time.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+      if (match) {
+        return `${match[4]}:${match[5]}:${match[6]}`;
+      }
+      return '';
+    },
+
+    /**
+     * 🌙 格式化日期时间
+     */
+    formatNightAlertDateTime(time) {
+      if (!time) return '';
+      const match = time.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+      if (match) {
+        return `${parseInt(match[1])}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+      }
+      return '';
+    },
+
+    /**
+     * 🌙 处理夜间学生出校提醒
+     */
+    handleNightStudentAlert(data) {
+      console.log('🌙 [夜间提醒] 收到提醒:', data);
+
+      // 构造夜间提醒对象
+      const alert = {
+        id: data.id,
+        type: 'night_student',
+        alertType: 'night_student_exit',
+        timestamp: data.timestamp || Date.now(),
+        eventTime: data.eventTime,
+
+        // 人员信息
+        personName: data.personName,
+        gender: data.gender,
+        college: data.college,
+        channelName: data.channelName,
+        photoUrl: data.photoUrl,
+
+        // 标记未展开
+        isExpanded: false
+      };
+
+      // 添加到提醒队列
+      this.reservationAlerts.unshift(alert);
+
+      // 限制队列长度
+      if (this.reservationAlerts.length > 1000) {
+        this.reservationAlerts = this.reservationAlerts.slice(0, 1000);
+      }
+
+      // 播放音效
+      this.playSoundAlert(alert);
+
+      // 更新未读数量
+      this.nightAlertUnreadCount++;
+      this.saveNightAlertUnreadCountToLocalStorage();
+
+      console.log('🌙 [夜间提醒] 添加到队列成功，当前未读:', this.nightAlertUnreadCount);
     },
     
     /**
@@ -1636,14 +2761,20 @@ export default {
      * 格式化预约时间段
      */
     formatTimeRange(startTime, endTime) {
-      if (!startTime || !endTime) return '未指定时间段';
+      
+      if (!startTime || !endTime) {
+        console.log('❌ 预约时间段为空，返回"未指定时间段"');
+        return '未指定时间段';
+      }
       
       const formatTime = (time) => {
         const date = new Date(time);
         return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
       };
       
-      return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+      const result = `${formatTime(startTime)} - ${formatTime(endTime)}`;
+      console.log('✅ 格式化预约时间段结果:', result);
+      return result;
     },
     
     /**
@@ -1709,14 +2840,25 @@ export default {
     },
     
     /**
-     * 忽略单条提醒（移到历史记录）
+     * 确认单条提醒
      */
-    dismissAlert(index, event) {
+    async dismissAlert(index, event) {
       console.log('📝 确认提醒 - 索引:', index);
       
       // 获取要确认的提醒
       const alert = this.reservationAlerts[index];
-      if (alert) {
+      if (!alert) {
+        console.warn('⚠️ 提醒不存在');
+        return;
+      }
+      
+      try {
+        // 如果有数据库ID，调用后端API确认
+        if (alert.id) {
+          await focusAlertService.confirmAlert(alert.id);
+          console.log('✅ 已调用后端API确认提醒:', alert.id);
+        }
+        
         // 标记为已确认
         alert.isConfirmed = true;
         alert.confirmedAt = Date.now();
@@ -1728,19 +2870,23 @@ export default {
         if (this.reservationAlertsHistory.length > this.maxHistorySize) {
           this.reservationAlertsHistory = this.reservationAlertsHistory.slice(0, this.maxHistorySize);
         }
+        
+        // 从当前队列中删除
+        this.reservationAlerts.splice(index, 1);
+        console.log('📊 剩余提醒数量:', this.reservationAlerts.length);
+        
+        // 如果没有提醒了，自动切换到历史记录tab
+        if (this.reservationAlerts.length === 0 && this.reservationAlertsHistory.length > 0) {
+          this.currentAlertTab = 'history';
+        }
+        
+        // 💾 保存到本地存储（作为备份）
+        this.saveAlertsToLocalStorage();
+        
+      } catch (error) {
+        console.error('❌ 确认提醒失败:', error);
+        alert('确认提醒失败，请重试');
       }
-      
-      // 从当前队列中删除
-      this.reservationAlerts.splice(index, 1);
-      console.log('📊 剩余提醒数量:', this.reservationAlerts.length);
-      
-      // 如果没有提醒了，自动切换到历史记录视图
-      if (this.reservationAlerts.length === 0 && this.reservationAlertsHistory.length > 0) {
-        this.showHistory = true;
-      }
-      
-      // 💾 保存到本地存储
-      this.saveAlertsToLocalStorage();
       
       // 阻止事件冒泡
       if (event) {
@@ -1760,27 +2906,48 @@ export default {
     /**
      * 清除所有提醒（移到历史记录）
      */
-    clearAllAlerts() {
-      // 将所有提醒移到历史记录
-      const now = Date.now();
-      this.reservationAlerts.forEach(alert => {
-        alert.isConfirmed = true;
-        alert.confirmedAt = now;
-        this.reservationAlertsHistory.unshift(alert);
-      });
-      
-      // 限制历史记录数量
-      if (this.reservationAlertsHistory.length > this.maxHistorySize) {
-        this.reservationAlertsHistory = this.reservationAlertsHistory.slice(0, this.maxHistorySize);
+    async clearAllAlerts() {
+      if (this.reservationAlerts.length === 0) {
+        return;
       }
       
-      // 清空当前队列
-      this.reservationAlerts = [];
-      this.showReservationAlerts = false;
-      this.isMinimized = false;
-      
-      // 💾 保存到本地存储
-      this.saveAlertsToLocalStorage();
+      try {
+        // 收集所有有数据库ID的提醒
+        const alertIds = this.reservationAlerts
+          .filter(alert => alert.id)
+          .map(alert => alert.id);
+        
+        // 如果有数据库记录，批量确认
+        if (alertIds.length > 0) {
+          await focusAlertService.confirmBatchAlerts(alertIds);
+          console.log('✅ 已批量确认', alertIds.length, '条提醒');
+        }
+        
+        // 将所有提醒移到历史记录
+        const now = Date.now();
+        this.reservationAlerts.forEach(alert => {
+          alert.isConfirmed = true;
+          alert.confirmedAt = now;
+          this.reservationAlertsHistory.unshift(alert);
+        });
+        
+        // 限制历史记录数量
+        if (this.reservationAlertsHistory.length > this.maxHistorySize) {
+          this.reservationAlertsHistory = this.reservationAlertsHistory.slice(0, this.maxHistorySize);
+        }
+        
+        // 清空当前队列
+        this.reservationAlerts = [];
+        this.showReservationAlerts = false;
+        this.isMinimized = false;
+        
+        // 💾 保存到本地存储（作为备份）
+        this.saveAlertsToLocalStorage();
+        
+      } catch (error) {
+        console.error('❌ 批量确认提醒失败:', error);
+        alert('批量确认失败，请重试');
+      }
     },
     
     /**
@@ -1819,18 +2986,18 @@ export default {
     /**
      * 切换提醒项的展开/折叠状态
      */
-    toggleAlertExpand(index) {
-      if (this.reservationAlerts[index]) {
-        this.$set(this.reservationAlerts[index], 'isExpanded', !this.reservationAlerts[index].isExpanded);
+    toggleAlertExpand(alert) {
+      if (alert) {
+        this.$set(alert, 'isExpanded', !alert.isExpanded);
       }
     },
     
     /**
      * 切换历史提醒项的展开/折叠状态
      */
-    toggleHistoryAlertExpand(index) {
-      if (this.reservationAlertsHistory[index]) {
-        this.$set(this.reservationAlertsHistory[index], 'isExpanded', !this.reservationAlertsHistory[index].isExpanded);
+    toggleHistoryAlertExpand(alert) {
+      if (alert) {
+        this.$set(alert, 'isExpanded', !alert.isExpanded);
       }
     },
     
@@ -1839,6 +3006,20 @@ export default {
      */
     toggleHistoryView() {
       this.showHistory = !this.showHistory;
+    },
+    
+    /**
+     * 切换提醒Tab
+     */
+    switchAlertTab(tab) {
+      this.currentAlertTab = tab;
+    },
+    
+    /**
+     * 更新关注对象的未确认提醒数量
+     */
+    updateFocusPendingCount(count) {
+      this.focusPendingCount = count;
     },
     
     /**
@@ -1939,9 +3120,213 @@ export default {
         console.error('❌ 保存提醒数据失败:', error);
       }
     },
+
+    /**
+     * 💾 保存夜间提醒未读数到本地存储
+     */
+    saveNightAlertUnreadCountToLocalStorage() {
+      try {
+        localStorage.setItem('nightAlertUnreadCount', String(this.nightAlertUnreadCount));
+      } catch (error) {
+        console.error('❌ 保存夜间提醒未读数失败:', error);
+      }
+    },
+
+    /**
+     * 📂 从本地存储加载夜间提醒未读数
+     */
+    loadNightAlertUnreadCountFromLocalStorage() {
+      try {
+        const stored = localStorage.getItem('nightAlertUnreadCount');
+        if (stored !== null) {
+          this.nightAlertUnreadCount = parseInt(stored, 10) || 0;
+          console.log('📂 夜间提醒未读数已从本地存储恢复:', this.nightAlertUnreadCount);
+        }
+      } catch (error) {
+        console.error('❌ 加载夜间提醒未读数失败:', error);
+      }
+    },
+
+    /**
+     * 💾 保存夜间提醒数据到本地存储
+     */
+    saveNightAlertsToLocalStorage() {
+      try {
+        const data = {
+          alerts: this.nightAlerts,
+          history: this.nightAlertsHistory,
+          savedAt: Date.now()
+        };
+        localStorage.setItem('night_alerts', JSON.stringify(data));
+        console.log('💾 夜间提醒数据已保存到本地存储');
+      } catch (error) {
+        console.error('❌ 保存夜间提醒数据失败:', error);
+      }
+    },
+
+    /**
+     * 📂 从本地存储加载夜间提醒数据
+     */
+    loadNightAlertsFromLocalStorage() {
+      try {
+        const stored = localStorage.getItem('night_alerts');
+        if (stored) {
+          const data = JSON.parse(stored);
+          this.nightAlerts = data.alerts || [];
+          this.nightAlertsHistory = data.history || [];
+          console.log('📂 夜间提醒数据已从本地存储恢复:', this.nightAlerts.length, '未读,', this.nightAlertsHistory.length, '历史');
+        }
+      } catch (error) {
+        console.error('❌ 加载夜间提醒数据失败:', error);
+      }
+    },
+
+    /**
+     * 🌙 从API获取夜间提醒未读数
+     */
+    async loadNightAlertUnreadCountFromAPI() {
+      try {
+        const response = await nightAlertService.getUnreadCount();
+        const result = response.data;
+        if (result.code === 200 || result.code === '0') {
+          this.nightAlertUnreadCount = result.data?.unreadCount || 0;
+          this.saveNightAlertUnreadCountToLocalStorage();
+          console.log('🌙 夜间提醒未读数已从API获取:', this.nightAlertUnreadCount);
+        }
+      } catch (error) {
+        console.error('❌ 获取夜间提醒未读数失败:', error);
+      }
+    },
+
+    /**
+     * 📂 从数据库加载提醒数据
+     */
+    async loadAlertsFromDatabase() {
+      try {
+        console.log('📂 开始从数据库加载提醒数据...');
+        
+        // 并行加载未确认提醒和历史记录
+        const [pendingData, historyData] = await Promise.all([
+          focusAlertService.getPendingAlerts(null, 1, 100),
+          focusAlertService.getHistoryAlerts(null, 1, 100)
+        ]);
+        
+        console.log('📊 API返回的原始数据:', {
+          pendingData,
+          historyData
+        });
+        
+        // 转换未确认提醒格式 (后端返回的字段是list而不是records)
+        const pendingList = pendingData.list || pendingData.records || [];
+        const historyList = historyData.list || historyData.records || [];
+        
+        console.log('📋 提取的数据列表:', {
+          pendingList: pendingList.length,
+          historyList: historyList.length,
+          pendingFirst: pendingList[0],
+          historyFirst: historyList[0]
+        });
+        
+        this.reservationAlerts = pendingList.map(record => this.convertAlertRecord(record));
+        this.reservationAlertsHistory = historyList.map(record => this.convertAlertRecord(record));
+        
+        console.log('✅ 从数据库加载提醒数据完成:', {
+          pending: this.reservationAlerts.length,
+          history: this.reservationAlertsHistory.length
+        });
+        
+      } catch (error) {
+        console.error('❌ 从数据库加载提醒数据失败:', error);
+        // 降级到本地存储
+        this.loadAlertsFromLocalStorage();
+      }
+    },
     
     /**
-     * 📂 从本地存储加载提醒数据
+     * 转换数据库记录为前端显示格式
+     */
+    convertAlertRecord(record) {
+      return {
+        id: record.id,
+        type: record.alertType,
+        alertType: 'focus_alert',
+        timestamp: new Date(record.eventTime).getTime(),
+        
+        // 车辆信息
+        plateNumber: record.alertType === 'vehicle' ? record.watchValue : null,
+        
+        // 人员信息
+        personName: record.personName,
+        idCard: record.alertType === 'person' ? record.watchValue : null,
+        department: record.department,
+        phoneNo: record.phoneNo,
+        
+        // 被访信息（映射到前端模板使用的字段名）
+        visitedPerson: record.reservationPerson,  // 预约人即被访人
+        visitedDepartment: record.department,     // 部门信息
+        
+        // 进出场信息
+        eventType: record.eventType,
+        channel: record.channelName,
+        channelName: record.channelName,
+        time: record.eventTime,
+        eventTime: record.eventTime,
+        imageUrl: record.photoUrl,
+        photoUrl: record.photoUrl,
+        
+        // 预约信息
+        visitorName: record.visitorName || record.personName || record.reservationPerson,  // 优先使用访客姓名
+        visitorPhone: record.reservationPhone,
+        purpose: record.reservationReason,
+        // 修复：使用visitor_reservation_time_range作为预约时间段，支持多种分隔符
+        reservationStartTime: record.visitorReservationTimeRange ? 
+          (record.visitorReservationTimeRange.includes(' ~ ') ? 
+            record.visitorReservationTimeRange.split(' ~ ')[0] : 
+            record.visitorReservationTimeRange.split(' - ')[0]) : null,
+        reservationEndTime: record.visitorReservationTimeRange ? 
+          (record.visitorReservationTimeRange.includes(' ~ ') ? 
+            record.visitorReservationTimeRange.split(' ~ ')[1] : 
+            record.visitorReservationTimeRange.split(' - ')[1]) : null,
+        
+        // 🔍 调试日志：检查预约时间段相关字段
+        ...(function() {
+          console.log('🕐 预约时间段调试信息:', {
+            recordId: record.id,
+            reservationTimeRange: record.reservationTimeRange,
+            visitorReservationTimeRange: record.visitorReservationTimeRange,
+            visitor_reservation_time_range: record.visitor_reservation_time_range,
+            allTimeFields: Object.keys(record).filter(key => key.toLowerCase().includes('time'))
+          });
+          return {};
+        })(),
+        reservation_person: record.reservationPerson,
+        reservation_phone: record.reservationPhone,
+        reservation_reason: record.reservationReason,
+        reservation_time_range: record.visitorReservationTimeRange,
+        
+        // 访客信息
+        visitor_pass_name: record.visitorPassName,
+        visitor_vip_type: record.visitorVipType,
+        visitor_park_name: record.visitorParkName,
+        visitor_reservation_time_range: record.visitorReservationTimeRange,
+        
+        // VIP类型（映射到前端显示）
+        vipType: record.visitorVipType,
+        
+        // 备注
+        remark: record.remark,
+        
+        // 确认状态
+        isConfirmed: record.isConfirmed === 1,
+        confirmedAt: record.confirmedAt ? new Date(record.confirmedAt).getTime() : null,
+        
+        // UI状态
+        isExpanded: false
+      };
+    },
+    
+    /**
+     * 📂 从本地存储加载提醒数据（降级方案）
      */
     loadAlertsFromLocalStorage() {
       try {
@@ -2073,8 +3458,683 @@ export default {
         animation: badgePulse 2s ease-in-out infinite;
       }
     }
+    
+    // 添加关注对象按钮
+    .add-watch-btn {
+      position: relative;
+      cursor: pointer;
+      padding: clamp(6px, 0.8vh, 8px) clamp(8px, 1vw, 12px);
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      border-radius: clamp(6px, 0.8vw, 8px);
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      min-width: clamp(36px, 4vw, 44px);
+      
+      &:hover {
+        background: rgba(59, 130, 246, 0.3);
+        border-color: rgba(59, 130, 246, 0.6);
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+      }
+      
+      &:active {
+        transform: translateY(0) scale(0.98);
+      }
+      
+      .add-icon {
+        font-size: clamp(18px, 2vw, 22px);
+        line-height: 1;
+        transition: all 0.3s ease;
+      }
+      
+      &:hover .add-icon {
+        transform: rotate(90deg);
+      }
+    }
+
+    // 🌙 夜间学生出校提醒按钮
+    .night-alert-btn {
+      position: relative;
+      cursor: pointer;
+      padding: clamp(6px, 0.8vh, 8px) clamp(8px, 1vw, 12px);
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      border-radius: clamp(6px, 0.8vw, 8px);
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      min-width: clamp(36px, 4vw, 44px);
+
+      &:hover {
+        background: rgba(139, 92, 246, 0.3);
+        border-color: rgba(139, 92, 246, 0.6);
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+      }
+
+      &:active {
+        transform: translateY(0) scale(0.98);
+      }
+
+      .night-alert-icon {
+        font-size: clamp(18px, 2vw, 22px);
+        line-height: 1;
+        transition: all 0.3s ease;
+      }
+
+      // 数字角标
+      .night-alert-badge {
+        position: absolute;
+        top: clamp(-4px, -0.5vh, -6px);
+        right: clamp(-6px, -0.6vw, -8px);
+        min-width: clamp(16px, 1.8vw, 22px);
+        height: clamp(16px, 1.8vw, 22px);
+        padding: 0 clamp(4px, 0.4vw, 6px);
+        background: linear-gradient(135deg, #ff4d4d 0%, #ff0000 100%);
+        border-radius: 20px;
+        box-shadow: 0 0 8px rgba(255, 0, 0, 0.6);
+        animation: nightBadgePulse 2s ease-in-out infinite;
+        font-size: clamp(9px, 0.9vw, 11px);
+        font-weight: bold;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      }
+    }
+
+    @keyframes nightBadgePulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+      }
+    }
   }
-  
+}
+
+// 🌙 夜间学生出校提醒列表小弹窗（独立于 .header-section，因为 DOM 中弹窗不在 header 内）
+.night-alert-list-popup {
+  position: fixed;
+  top: 65px;
+  right: 15px;
+  width: 560px;
+  max-height: calc(100vh - 100px);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.95) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 16px;
+  overflow: hidden;
+  z-index: 9999;
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+
+    .night-alert-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: clamp(12px, 1.5vh, 16px) clamp(15px, 2vw, 20px);
+      background: linear-gradient(90deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+      border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .header-icon {
+          font-size: 20px;
+        }
+
+        .header-title {
+          font-size: 16px;
+          font-weight: bold;
+          color: #fff;
+        }
+
+        .alert-count {
+          background: linear-gradient(135deg, #ff4d4d 0%, #ff0000 100%);
+          color: #fff;
+          font-size: 11px;
+          font-weight: bold;
+          padding: 2px 8px;
+          border-radius: 10px;
+          min-width: 20px;
+          text-align: center;
+        }
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 8px;
+
+        .btn-action {
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+          transition: all 0.2s;
+          background: rgba(59, 130, 246, 0.2);
+          color: #3b82f6;
+
+          &:hover {
+            background: rgba(59, 130, 246, 0.4);
+          }
+        }
+
+        .btn-close {
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          background: rgba(239, 68, 68, 0.2);
+          color: #ef4444;
+          transition: all 0.2s;
+
+          &:hover {
+            background: rgba(239, 68, 68, 0.4);
+          }
+        }
+      }
+    }
+
+    .night-alert-tabs {
+      display: flex;
+      gap: 8px;
+      padding: clamp(10px, 1.2vh, 14px) clamp(12px, 1.5vw, 16px);
+      border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+
+      .tab {
+        padding: 6px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #94a3b8;
+        transition: all 0.2s;
+
+        &.active {
+          background: rgba(139, 92, 246, 0.3);
+          color: #fff;
+        }
+
+        &:hover:not(.active) {
+          background: rgba(59, 130, 246, 0.1);
+        }
+      }
+    }
+
+    .night-alert-filters {
+      display: flex;
+      gap: 8px;
+      padding: 8px 16px;
+      border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+      align-items: center;
+      flex-wrap: nowrap;
+
+      .filter-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+
+        label {
+          font-size: 12px;
+          color: #94a3b8;
+          white-space: nowrap;
+        }
+
+        .filter-input {
+          width: 110px;
+          background: rgba(11, 19, 42, 0.9);
+          border: 1px solid rgba(59, 130, 246, 0.25);
+          border-radius: 6px;
+          color: #fff;
+          padding: 5px 24px 5px 8px;
+          font-size: 12px;
+          cursor: pointer;
+
+          &::placeholder {
+            color: #64748b;
+          }
+
+          &:focus {
+            outline: none;
+            border-color: #3b82f6;
+          }
+        }
+
+        .filter-select {
+          background: rgba(11, 19, 42, 0.9);
+          border: 1px solid rgba(59, 130, 246, 0.25);
+          border-radius: 6px;
+          color: #fff;
+          padding: 5px 8px;
+          font-size: 12px;
+          cursor: pointer;
+
+          &:focus {
+            outline: none;
+            border-color: #3b82f6;
+          }
+
+          option {
+            background: rgba(11, 19, 42, 0.98);
+          }
+        }
+
+        &.search-filter {
+          .searchable-select {
+            position: relative;
+
+            .select-trigger {
+              position: relative;
+              display: flex;
+              align-items: center;
+
+              .select-arrow {
+                position: absolute;
+                right: 6px;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #64748b;
+                font-size: 10px;
+                pointer-events: none;
+                transition: transform 0.2s;
+              }
+            }
+
+            &.open .select-trigger .select-arrow {
+              transform: translateY(-50%) rotate(180deg);
+            }
+
+            .select-dropdown {
+              position: absolute;
+              top: calc(100% + 4px);
+              left: 0;
+              width: 180px;
+              max-height: 200px;
+              overflow-y: auto;
+              background: rgba(11, 19, 42, 0.98);
+              border: 1px solid rgba(59, 130, 246, 0.4);
+              border-radius: 6px;
+              z-index: 10001;
+              box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+              &::-webkit-scrollbar {
+                width: 4px;
+              }
+              &::-webkit-scrollbar-thumb {
+                background: rgba(139, 92, 246, 0.3);
+                border-radius: 2px;
+              }
+
+              .select-option {
+                padding: 6px 10px;
+                font-size: 12px;
+                color: #e2e8f0;
+                cursor: pointer;
+                transition: background 0.15s;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+
+                &:hover {
+                  background: rgba(59, 130, 246, 0.2);
+                }
+
+                &.selected {
+                  background: rgba(139, 92, 246, 0.25);
+                  color: #a78bfa;
+                }
+
+                &.default-option {
+                  color: #94a3b8;
+                  border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+                }
+              }
+
+              .no-options {
+                padding: 8px 10px;
+                font-size: 12px;
+                color: #64748b;
+                text-align: center;
+              }
+            }
+          }
+        }
+      }
+
+      .btn-query {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(59, 130, 246, 0.15) 100%);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        border-radius: 6px;
+        color: #60a5fa;
+        padding: 5px 14px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-left: auto;
+        transition: all 0.2s;
+        white-space: nowrap;
+
+        &:hover {
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0.25) 100%);
+          border-color: #3b82f6;
+        }
+      }
+
+      .btn-clear-filter {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 6px;
+        color: #f87171;
+        padding: 5px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+
+        &:hover {
+          background: rgba(239, 68, 68, 0.25);
+          border-color: #ef4444;
+        }
+      }
+    }
+
+    .night-alert-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: clamp(8px, 1vh, 12px);
+
+      .empty-state {
+        text-align: center;
+        color: #64748b;
+        padding: 40px 20px;
+
+        .empty-icon {
+          font-size: 48px;
+          display: block;
+          margin-bottom: 10px;
+        }
+
+        p {
+          font-size: 14px;
+        }
+      }
+
+      .night-alert-item {
+        background: linear-gradient(135deg, rgba(20, 30, 60, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%);
+        border: 1px solid rgba(139, 92, 246, 0.2);
+        border-radius: 12px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+
+        &:hover {
+          border-color: rgba(139, 92, 246, 0.5);
+          background: linear-gradient(135deg, rgba(30, 50, 90, 0.9) 0%, rgba(50, 70, 100, 0.7) 100%);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        &.unread {
+          border-left: 4px solid #8b5cf6;
+          background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(30, 41, 59, 0.7) 100%);
+        }
+
+        &.expanded {
+          border-color: rgba(139, 92, 246, 0.7);
+          box-shadow: 0 10px 35px rgba(139, 92, 246, 0.2);
+        }
+
+        .item-compact {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+
+          .item-icon {
+            font-size: 18px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 6px;
+          }
+
+          .person-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f1f5f9;
+            min-width: 70px;
+          }
+
+          .college {
+            font-size: 12px;
+            color: #94a3b8;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .channel {
+            font-size: 12px;
+            color: #64748b;
+            min-width: 80px;
+          }
+
+          .time {
+            font-size: 12px;
+            color: #60a5fa;
+            font-family: 'SF Mono', monospace;
+            min-width: 65px;
+          }
+
+          .expand-icon {
+            font-size: 12px;
+            color: #64748b;
+            transition: transform 0.3s ease;
+          }
+        }
+
+        &.expanded .expand-icon {
+          transform: rotate(180deg);
+        }
+
+        .item-expanded {
+          padding: 14px;
+          position: relative;
+          border-top: 1px solid rgba(139, 92, 246, 0.15);
+          background: rgba(11, 19, 42, 0.4);
+          animation: slideDown 0.3s ease;
+
+          @keyframes slideDown {
+            from {
+              opacity: 0;
+              transform: translateY(-10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+
+          .item-main {
+            display: flex;
+            gap: 14px;
+
+            .item-photo {
+              width: 64px;
+              height: 64px;
+              border-radius: 10px;
+              overflow: hidden;
+              flex-shrink: 0;
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+              img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+              }
+
+              .photo-placeholder {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+                font-size: 26px;
+                font-weight: bold;
+                color: #fff;
+              }
+            }
+
+            .item-info {
+              flex: 1;
+
+              .info-row {
+                display: flex;
+                margin-bottom: 6px;
+                font-size: 13px;
+
+                .label {
+                  color: #64748b;
+                  min-width: 50px;
+                }
+
+                .value {
+                  color: #e2e8f0;
+                }
+              }
+            }
+          }
+
+          .item-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(30, 58, 138, 0.3);
+
+            .btn-confirm {
+              background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.1) 100%);
+              border: 1px solid rgba(34, 197, 94, 0.4);
+              border-radius: 6px;
+              color: #4ade80;
+              padding: 6px 16px;
+              font-size: 12px;
+              cursor: pointer;
+              transition: all 0.2s;
+
+              &:hover {
+                background: linear-gradient(135deg, rgba(34, 197, 94, 0.4) 0%, rgba(22, 163, 74, 0.2) 100%);
+                transform: translateY(-1px);
+              }
+            }
+
+            .btn-confirm-all {
+              background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(109, 40, 217, 0.1) 100%);
+              border: 1px solid rgba(139, 92, 246, 0.4);
+              border-radius: 6px;
+              color: #a78bfa;
+              padding: 6px 16px;
+              font-size: 12px;
+              cursor: pointer;
+              transition: all 0.2s;
+
+              &:hover {
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(109, 40, 217, 0.2) 100%);
+                transform: translateY(-1px);
+              }
+            }
+          }
+
+          .collapse-icon {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            font-size: 12px;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s;
+
+            &:hover {
+              color: #fff;
+            }
+          }
+        }
+
+        .status-badge {
+          font-size: 10px;
+          padding: 2px 6px;
+          border-radius: 4px;
+
+          &.read {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+          }
+        }
+      }
+    }
+
+    .night-alert-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: clamp(10px, 1.2vh, 14px) clamp(12px, 1.5vw, 16px);
+      border-top: 1px solid rgba(139, 92, 246, 0.2);
+      background: linear-gradient(90deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+
+      .record-count {
+        font-size: 12px;
+        color: #94a3b8;
+      }
+
+      .btn-confirm-all-bottom {
+        background: rgba(34, 197, 94, 0.2);
+        border: 1px solid #22c55e;
+        border-radius: 4px;
+        color: #22c55e;
+        padding: 4px 12px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &:hover {
+          background: rgba(34, 197, 94, 0.4);
+        }
+      }
+    }
+}
+
+.header-section {
   .header-right {
     display: flex;
     gap: clamp(8px, 1.2vw, 20px);
@@ -2247,7 +4307,7 @@ export default {
 // 页面内容区域样式
 .page-content {
   flex: 1;
-  min-height: calc(100vh - 80px);
+  min-height: 0;
   height: 100%;
   overflow: hidden;
   display: flex;
@@ -2412,10 +4472,9 @@ export default {
   grid-template-columns: minmax(280px, 0.95fr) minmax(400px, 1.8fr) minmax(300px, 1.05fr);
   gap: clamp(8px, 1vw, 15px);
   padding: clamp(5px, 0.5vh, 15px) clamp(5px, 0.5vw, 15px);
-  margin: 0;
   flex: 1;
-  height: 100%;
   min-height: 0;
+  height: 100%;
   width: 100%;
   box-sizing: border-box;
   
@@ -3152,6 +5211,25 @@ export default {
         border-radius: 4px;
         border: 1px solid rgba(239, 68, 68, 0.3);
       }
+      
+      .plate {
+        color: #4caf50;
+        font-weight: bold;
+        font-family: 'Courier New', monospace;
+        background: rgba(76, 175, 80, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(76, 175, 80, 0.3);
+      }
+      
+      .vip-type {
+        color: #ff9800;
+        font-weight: bold;
+        background: rgba(255, 152, 0, 0.1);
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 152, 0, 0.3);
+      }
     }
   }
   
@@ -3469,6 +5547,42 @@ export default {
   }
 }
 
+/* 类型筛选器样式 */
+.alert-filter {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  
+  .filter-btn {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    &.active {
+      color: #fff;
+      background: linear-gradient(135deg, rgba(72, 118, 255, 0.4) 0%, rgba(100, 149, 237, 0.3) 100%);
+      border-color: rgba(100, 149, 237, 0.5);
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(72, 118, 255, 0.3);
+    }
+  }
+}
+
 /* 提醒列表容器 */
 .alert-list {
   min-height: 100px;
@@ -3516,13 +5630,17 @@ export default {
     .type-badge {
       font-size: 20px;
       flex-shrink: 0;
-      
+
       &.vehicle {
         filter: drop-shadow(0 0 4px rgba(72, 118, 255, 0.5));
       }
-      
+
       &.person {
         filter: drop-shadow(0 0 4px rgba(82, 196, 26, 0.5));
+      }
+
+      &.night_student {
+        filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.8));
       }
     }
     
@@ -3577,6 +5695,11 @@ export default {
       border: 1px solid rgba(72, 118, 255, 0.4);
       letter-spacing: 1px;
       flex-shrink: 0;
+
+      &.night-student {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(109, 40, 217, 0.4) 100%);
+        border: 1px solid rgba(139, 92, 246, 0.6);
+      }
     }
     
     .channel-name {
@@ -4040,5 +6163,182 @@ export default {
       }
     }
   }
+}
+
+// 修改密码弹窗样式
+.password-modal {
+  width: clamp(300px, 90vw, 420px);
+  max-width: 95vw;
+
+  .modal-body {
+    padding: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #e2e8f0;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .password-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      input {
+        flex: 1;
+        width: 100%;
+        padding: 10px 45px 10px 14px;
+        font-size: 14px;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+
+        &::placeholder {
+          color: rgba(255, 255, 255, 0.4);
+        }
+
+        &:focus {
+          outline: none;
+          border-color: #3b82f6;
+          background: rgba(255, 255, 255, 0.08);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        &.error {
+          border-color: #ef4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+      }
+
+      .toggle-password-btn {
+        position: absolute;
+        right: 10px;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 18px;
+        cursor: pointer;
+        padding: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        z-index: 1;
+
+        &:hover {
+          color: rgba(255, 255, 255, 0.9);
+          transform: scale(1.1);
+        }
+
+        &:active {
+          transform: scale(0.95);
+        }
+
+        span {
+          display: block;
+          line-height: 1;
+        }
+      }
+    }
+
+    input {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      box-sizing: border-box;
+      transition: all 0.3s ease;
+
+      &::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      &:focus {
+        outline: none;
+        border-color: #3b82f6;
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+      }
+
+      &.error {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+      }
+    }
+
+    .error-text {
+      display: block;
+      margin-top: 6px;
+      color: #ef4444;
+      font-size: 12px;
+    }
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+
+    .btn {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+
+    .btn-success {
+      color: #fff;
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+
+      &:hover:not(:disabled) {
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      }
+    }
+
+    .btn-cancel {
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+
+      &:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.25);
+      }
+    }
+  }
+}
+
+// 密码确认对话框样式 - 确保在最上层
+::v-deep .password-confirm-dialog {
+  z-index: 10001 !important;
+}
+
+::v-deep .v-modal {
+  z-index: 10000 !important;
 }
 </style>
