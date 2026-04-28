@@ -664,22 +664,23 @@
               <div class="select-trigger" @click="toggleNightChannelSelect">
                 <input
                   type="text"
-                  v-model="nightFilterChannelInput"
+                  v-model="activeNightChannelInput"
                   @focus="openNightChannelSelect"
                   @blur="closeNightChannelSelect"
                   @input="filterNightChannelOptions"
                   placeholder="全部通道"
                   class="filter-input"
                 />
-                <span class="select-arrow">&#9662;</span>
+                <span v-if="activeNightFilterChannel" class="select-clear" @mousedown.prevent="clearNightChannel" title="清空通道">×</span>
+                <span v-else class="select-arrow">&#9662;</span>
               </div>
               <div v-show="nightChannelSelectOpen" class="select-dropdown">
-                <div class="select-option default-option" :class="{ selected: !nightFilterChannel }" @mousedown.prevent="selectNightChannel('')">全部</div>
+                <div class="select-option default-option" :class="{ selected: !activeNightFilterChannel }" @mousedown.prevent="selectNightChannel('')">全部</div>
                 <div
                   v-for="ch in filteredNightChannelOptions"
                   :key="ch"
                   class="select-option"
-                  :class="{ selected: nightFilterChannel === ch }"
+                  :class="{ selected: activeNightFilterChannel === ch }"
                   @mousedown.prevent="selectNightChannel(ch)"
                 >
                   {{ ch }}
@@ -690,7 +691,7 @@
           </div>
           <div class="filter-item">
             <label>性别</label>
-            <select v-model="nightFilterGender" class="filter-select">
+            <select v-model="activeNightFilterGender" class="filter-select">
               <option value="">全部</option>
               <option value="男">男</option>
               <option value="女">女</option>
@@ -702,22 +703,23 @@
               <div class="select-trigger" @click="toggleNightCollegeSelect">
                 <input
                   type="text"
-                  v-model="nightFilterCollegeInput"
+                  v-model="activeNightCollegeInput"
                   @focus="openNightCollegeSelect"
                   @blur="closeNightCollegeSelect"
                   @input="filterNightCollegeOptions"
                   placeholder="全部学院"
                   class="filter-input"
                 />
-                <span class="select-arrow">&#9662;</span>
+                <span v-if="activeNightFilterCollege" class="select-clear" @mousedown.prevent="clearNightCollege" title="清空学院">×</span>
+                <span v-else class="select-arrow">&#9662;</span>
               </div>
               <div v-show="nightCollegeSelectOpen" class="select-dropdown">
-                <div class="select-option default-option" :class="{ selected: !nightFilterCollege }" @mousedown.prevent="selectNightCollege('')">全部</div>
+                <div class="select-option default-option" :class="{ selected: !activeNightFilterCollege }" @mousedown.prevent="selectNightCollege('')">全部</div>
                 <div
                   v-for="c in filteredNightCollegeOptions"
                   :key="c"
                   class="select-option"
-                  :class="{ selected: nightFilterCollege === c }"
+                  :class="{ selected: activeNightFilterCollege === c }"
                   @mousedown.prevent="selectNightCollege(c)"
                 >
                   {{ c }}
@@ -727,7 +729,7 @@
             </div>
           </div>
           <button class="btn-query" @click="queryNightAlerts">查询</button>
-          <button v-if="nightFilterChannel || nightFilterGender || nightFilterCollege" class="btn-clear-filter" @click="clearNightFilters" title="清除筛选">
+          <button v-if="hasActiveNightFilters" class="btn-clear-filter" @click="clearNightFilters" title="清除筛选">
             <span>重置</span>
           </button>
         </div>
@@ -758,31 +760,32 @@
             <!-- 展开状态 -->
             <div class="item-expanded" v-else>
               <div class="item-main">
-                <div class="item-photo">
-                  <img v-if="alert.photoUrl" :src="alert.photoUrl" alt="照片" />
+                <div class="item-photo face-capture">
+                  <img v-if="alert.faceCaptureUrl || alert.photoUrl" :src="alert.faceCaptureUrl || alert.photoUrl" alt="人脸抓拍" />
                   <div v-else class="photo-placeholder">
                     <span>{{ alert.personName?.charAt(0) || '?' }}</span>
                   </div>
+                  <span v-if="alert.faceCaptureUrl" class="photo-tag">抓拍</span>
                 </div>
                 <div class="item-info">
-                  <div class="info-row">
-                    <span class="label">姓名：</span>
+                  <div class="info-row info-name">
+                    <span class="label"><span class="label-icon">👤</span>姓名</span>
                     <span class="value">{{ alert.personName }}</span>
                   </div>
-                  <div class="info-row">
-                    <span class="label">性别：</span>
+                  <div class="info-row info-gender">
+                    <span class="label"><span class="label-icon">⚥</span>性别</span>
                     <span class="value">{{ alert.gender }}</span>
                   </div>
                   <div class="info-row">
-                    <span class="label">学院：</span>
+                    <span class="label"><span class="label-icon">🏛️</span>学院</span>
                     <span class="value">{{ alert.college }}</span>
                   </div>
                   <div class="info-row">
-                    <span class="label">通道：</span>
+                    <span class="label"><span class="label-icon">🚪</span>通道</span>
                     <span class="value">{{ alert.channelName }}</span>
                   </div>
-                  <div class="info-row">
-                    <span class="label">时间：</span>
+                  <div class="info-row info-time">
+                    <span class="label"><span class="label-icon">🕐</span>时间</span>
                     <span class="value">{{ formatNightAlertDateTime(alert.eventTime) }}</span>
                   </div>
                 </div>
@@ -825,9 +828,10 @@
             </div>
             <div v-if="nightAlertExpandedId === alert.id" class="item-expanded">
               <div class="item-main">
-                <div class="item-photo">
-                  <img v-if="alert.photoUrl" :src="alert.photoUrl" alt="照片" />
+                <div class="item-photo face-capture">
+                  <img v-if="alert.faceCaptureUrl || alert.photoUrl" :src="alert.faceCaptureUrl || alert.photoUrl" alt="人脸抓拍" />
                   <div v-else class="photo-placeholder">{{ alert.personName?.charAt(0) || '?' }}</div>
+                  <span v-if="alert.faceCaptureUrl" class="photo-tag">抓拍</span>
                 </div>
                 <div class="item-info">
                   <div class="info-row">
@@ -1193,23 +1197,32 @@ export default {
       nightAlertFilter: 'all',            // 筛选: all/male/female
       nightAlertViewMode: 'stats',       // stats-统计面板 / config-配置面板
 
-      // 夜间提醒筛选条件
-      nightFilterChannel: '',
-      nightFilterGender: '',
-      nightFilterCollege: '',
+      // 夜间提醒筛选条件 - 分离未确认和历史记录
+      pendingFilters: {
+        channel: '',
+        gender: '',
+        college: ''
+      },
+      historyFilters: {
+        channel: '',
+        gender: '',
+        college: ''
+      },
       nightStartDate: '',
       nightEndDate: '',
       nightChannelOptions: [],
       nightCollegeOptions: [],
       nightAlertExpandedId: null,         // 当前展开的提醒ID
 
-      // 夜间提醒可搜索下拉
-      nightFilterChannelInput: '',
+      // 夜间提醒可搜索下拉 - 分离未确认和历史记录
+      pendingChannelInput: '',
+      pendingCollegeInput: '',
       nightChannelSelectOpen: false,
       filteredNightChannelOptions: [],
-      nightFilterCollegeInput: '',
       nightCollegeSelectOpen: false,
       filteredNightCollegeOptions: [],
+      historyChannelInput: '',
+      historyCollegeInput: '',
     };
   },
   components: {
@@ -1282,6 +1295,73 @@ export default {
         return this.filteredHistoryPersons;
       }
       return this.reservationAlertsHistory;
+    },
+
+    // 夜间提醒 - 当前Tab激活的筛选条件
+    activeNightFilterChannel: {
+      get() {
+        return this.currentNightAlertTab === 'pending' ? this.pendingFilters.channel : this.historyFilters.channel;
+      },
+      set(value) {
+        if (this.currentNightAlertTab === 'pending') {
+          this.pendingFilters.channel = value;
+        } else {
+          this.historyFilters.channel = value;
+        }
+      }
+    },
+    activeNightFilterGender: {
+      get() {
+        return this.currentNightAlertTab === 'pending' ? this.pendingFilters.gender : this.historyFilters.gender;
+      },
+      set(value) {
+        if (this.currentNightAlertTab === 'pending') {
+          this.pendingFilters.gender = value;
+        } else {
+          this.historyFilters.gender = value;
+        }
+      }
+    },
+    activeNightFilterCollege: {
+      get() {
+        return this.currentNightAlertTab === 'pending' ? this.pendingFilters.college : this.historyFilters.college;
+      },
+      set(value) {
+        if (this.currentNightAlertTab === 'pending') {
+          this.pendingFilters.college = value;
+        } else {
+          this.historyFilters.college = value;
+        }
+      }
+    },
+    activeNightChannelInput: {
+      get() {
+        return this.currentNightAlertTab === 'pending' ? this.pendingChannelInput : this.historyChannelInput;
+      },
+      set(value) {
+        if (this.currentNightAlertTab === 'pending') {
+          this.pendingChannelInput = value;
+        } else {
+          this.historyChannelInput = value;
+        }
+      }
+    },
+    activeNightCollegeInput: {
+      get() {
+        return this.currentNightAlertTab === 'pending' ? this.pendingCollegeInput : this.historyCollegeInput;
+      },
+      set(value) {
+        if (this.currentNightAlertTab === 'pending') {
+          this.pendingCollegeInput = value;
+        } else {
+          this.historyCollegeInput = value;
+        }
+      }
+    },
+    // 判断当前Tab是否有激活的筛选条件
+    hasActiveNightFilters() {
+      const filters = this.currentNightAlertTab === 'pending' ? this.pendingFilters : this.historyFilters;
+      return !!(filters.channel || filters.gender || filters.college);
     }
   },
   mounted() {
@@ -2070,6 +2150,7 @@ export default {
                 channelName: data.channelName || '未知通道',
                 eventTime: data.eventTime,
                 photoUrl: data.photoUrl || '',
+                faceCaptureUrl: data.faceCaptureUrl || '',
                 timestamp: Date.now(),
                 isRead: false
               };
@@ -2345,34 +2426,47 @@ export default {
     },
 
     /**
-     * 🌙 加载夜间提醒记录
+     * 🌙 加载夜间提醒记录（未确认和历史记录分别独立查询）
      */
     async loadNightAlertRecords() {
       try {
-        const params = {
-          pageNum: 1,
-          pageSize: 200
-        };
-        if (this.nightFilterChannel) params.channelName = this.nightFilterChannel;
-        if (this.nightFilterGender) params.gender = this.nightFilterGender;
-        if (this.nightFilterCollege) params.college = this.nightFilterCollege;
+        const pendingParams = { pageNum: 1, pageSize: 200 };
+        if (this.pendingFilters.channel) pendingParams.channelName = this.pendingFilters.channel;
+        if (this.pendingFilters.gender) pendingParams.gender = this.pendingFilters.gender;
+        if (this.pendingFilters.college) pendingParams.college = this.pendingFilters.college;
 
-        const response = await nightAlertService.getRecords(params);
-        const result = response.data;
+        const historyParams = { pageNum: 1, pageSize: 200 };
+        if (this.historyFilters.channel) historyParams.channelName = this.historyFilters.channel;
+        if (this.historyFilters.gender) historyParams.gender = this.historyFilters.gender;
+        if (this.historyFilters.college) historyParams.college = this.historyFilters.college;
 
-        if (result.code === 200 || result.code === '0') {
-          const data = result.data || {};
-          const records = (data.records || []).map(r => ({
+        const [pendingRes, historyRes] = await Promise.all([
+          nightAlertService.getRecords(pendingParams),
+          nightAlertService.getRecords(historyParams)
+        ]);
+
+        const pendingResult = pendingRes.data;
+        if (pendingResult.code === 200 || pendingResult.code === '0') {
+          const records = ((pendingResult.data || {}).records || []).map(r => ({
             ...r,
             isRead: r.isRead === 1 || r.isRead === true
           }));
           this.nightAlerts = records.filter(r => !r.isRead);
-          this.nightAlertsHistory = records.filter(r => r.isRead);
-          this.saveNightAlertsToLocalStorage();
           this.nightAlertUnreadCount = this.nightAlerts.length;
           this.saveNightAlertUnreadCountToLocalStorage();
-          console.log('🌙 [夜间提醒] 记录加载成功, 未读:', this.nightAlerts.length, '已读:', this.nightAlertsHistory.length);
         }
+
+        const historyResult = historyRes.data;
+        if (historyResult.code === 200 || historyResult.code === '0') {
+          const records = ((historyResult.data || {}).records || []).map(r => ({
+            ...r,
+            isRead: r.isRead === 1 || r.isRead === true
+          }));
+          this.nightAlertsHistory = records.filter(r => r.isRead);
+        }
+
+        this.saveNightAlertsToLocalStorage();
+        console.log('🌙 [夜间提醒] 记录加载成功, 未读:', this.nightAlerts.length, '已读:', this.nightAlertsHistory.length);
       } catch (error) {
         console.error('❌ [夜间提醒] 加载记录失败', error);
       }
@@ -2410,11 +2504,34 @@ export default {
      * 🌙 清除筛选条件
      */
     clearNightFilters() {
-      this.nightFilterChannel = '';
-      this.nightFilterCollege = '';
-      this.nightFilterGender = '';
-      this.nightFilterChannelInput = '';
-      this.nightFilterCollegeInput = '';
+      if (this.currentNightAlertTab === 'pending') {
+        this.pendingFilters.channel = '';
+        this.pendingFilters.gender = '';
+        this.pendingFilters.college = '';
+        this.pendingChannelInput = '';
+        this.pendingCollegeInput = '';
+      } else {
+        this.historyFilters.channel = '';
+        this.historyFilters.gender = '';
+        this.historyFilters.college = '';
+        this.historyChannelInput = '';
+        this.historyCollegeInput = '';
+      }
+      this.loadNightAlertRecords();
+    },
+
+    clearNightChannel() {
+      this.activeNightFilterChannel = '';
+      this.activeNightChannelInput = '';
+      this.nightChannelSelectOpen = false;
+      this.loadNightAlertRecords();
+    },
+
+    clearNightCollege() {
+      this.activeNightFilterCollege = '';
+      this.activeNightCollegeInput = '';
+      this.nightCollegeSelectOpen = false;
+      this.loadNightAlertRecords();
     },
 
     toggleNightChannelSelect() {
@@ -2437,15 +2554,15 @@ export default {
     },
 
     filterNightChannelOptions() {
-      const keyword = this.nightFilterChannelInput.toLowerCase();
+      const keyword = this.activeNightChannelInput.toLowerCase();
       this.filteredNightChannelOptions = this.nightChannelOptions.filter(ch =>
         ch.toLowerCase().includes(keyword)
       );
     },
 
     selectNightChannel(ch) {
-      this.nightFilterChannel = ch;
-      this.nightFilterChannelInput = ch;
+      this.activeNightFilterChannel = ch;
+      this.activeNightChannelInput = ch;
       this.nightChannelSelectOpen = false;
     },
 
@@ -2469,15 +2586,15 @@ export default {
     },
 
     filterNightCollegeOptions() {
-      const keyword = this.nightFilterCollegeInput.toLowerCase();
+      const keyword = this.activeNightCollegeInput.toLowerCase();
       this.filteredNightCollegeOptions = this.nightCollegeOptions.filter(c =>
         c.toLowerCase().includes(keyword)
       );
     },
 
     selectNightCollege(c) {
-      this.nightFilterCollege = c;
-      this.nightFilterCollegeInput = c;
+      this.activeNightFilterCollege = c;
+      this.activeNightCollegeInput = c;
       this.nightCollegeSelectOpen = false;
     },
 
@@ -2576,6 +2693,7 @@ export default {
         college: data.college,
         channelName: data.channelName,
         photoUrl: data.photoUrl,
+        faceCaptureUrl: data.faceCaptureUrl,
 
         // 标记未展开
         isExpanded: false
@@ -3763,6 +3881,27 @@ export default {
                 pointer-events: none;
                 transition: transform 0.2s;
               }
+
+              .select-clear {
+                position: absolute;
+                right: 6px;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #94a3b8;
+                font-size: 14px;
+                cursor: pointer;
+                width: 16px;
+                height: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                transition: all 0.2s;
+                &:hover {
+                  color: #f87171;
+                  background: rgba(248, 113, 113, 0.15);
+                }
+              }
             }
 
             &.open .select-trigger .select-arrow {
@@ -3968,11 +4107,12 @@ export default {
         }
 
         .item-expanded {
-          padding: 14px;
+          padding: 16px;
           position: relative;
-          border-top: 1px solid rgba(139, 92, 246, 0.15);
-          background: rgba(11, 19, 42, 0.4);
+          border-top: 1px solid rgba(139, 92, 246, 0.2);
+          background: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.85) 100%);
           animation: slideDown 0.3s ease;
+          border-radius: 0 0 12px 12px;
 
           @keyframes slideDown {
             from {
@@ -3987,15 +4127,17 @@ export default {
 
           .item-main {
             display: flex;
-            gap: 14px;
+            gap: 18px;
+            align-items: flex-start;
 
             .item-photo {
-              width: 64px;
-              height: 64px;
-              border-radius: 10px;
+              width: 72px;
+              height: 72px;
+              border-radius: 50%;
               overflow: hidden;
               flex-shrink: 0;
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+              box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3), 0 0 0 3px rgba(139, 92, 246, 0.2);
+              background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
 
               img {
                 width: 100%;
@@ -4010,7 +4152,7 @@ export default {
                 align-items: center;
                 justify-content: center;
                 background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-                font-size: 26px;
+                font-size: 28px;
                 font-weight: bold;
                 color: #fff;
               }
@@ -4018,19 +4160,96 @@ export default {
 
             .item-info {
               flex: 1;
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 10px 20px;
 
               .info-row {
                 display: flex;
-                margin-bottom: 6px;
-                font-size: 13px;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                background: rgba(139, 92, 246, 0.08);
+                border-radius: 8px;
+                border: 1px solid rgba(139, 92, 246, 0.15);
+                transition: all 0.25s ease;
+
+                &:hover {
+                  background: rgba(139, 92, 246, 0.15);
+                  border-color: rgba(139, 92, 246, 0.3);
+                  transform: translateX(3px);
+                }
 
                 .label {
-                  color: #64748b;
-                  min-width: 50px;
+                  display: flex;
+                  align-items: center;
+                  gap: 5px;
+                  color: #a78bfa;
+                  font-size: 11px;
+                  font-weight: 600;
+                  text-transform: uppercase;
+                  letter-spacing: 0.8px;
+                  white-space: nowrap;
+
+                  .label-icon {
+                    font-size: 12px;
+                    opacity: 0.8;
+                  }
+
+                  &::after {
+                    content: ':';
+                    color: #6366f1;
+                    margin-left: 2px;
+                  }
                 }
 
                 .value {
-                  color: #e2e8f0;
+                  color: #f1f5f9;
+                  font-weight: 500;
+                  font-size: 13px;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                }
+
+                &.info-name {
+                  grid-column: 1 / -1;
+                  background: linear-gradient(90deg, rgba(139, 92, 246, 0.2) 0%, rgba(139, 92, 246, 0.05) 100%);
+                  border-color: rgba(139, 92, 246, 0.3);
+
+                  .label {
+                    color: #c4b5fd;
+                  }
+
+                  .value {
+                    font-size: 15px;
+                    font-weight: 700;
+                    color: #fff;
+                    letter-spacing: 1px;
+                  }
+                }
+
+                &.info-gender {
+                  .value {
+                    color: #fb7185;
+                  }
+                }
+
+                &.info-time {
+                  grid-column: 1 / -1;
+                  background: rgba(59, 130, 246, 0.1);
+                  border-color: rgba(59, 130, 246, 0.2);
+
+                  .label {
+                    color: #60a5fa;
+                  }
+
+                  .value {
+                    font-family: 'SF Mono', 'JetBrains Mono', monospace;
+                    font-size: 12px;
+                    color: #93c5fd;
+                    letter-spacing: 0.5px;
+                  }
                 }
               }
             }
@@ -4038,40 +4257,56 @@ export default {
 
           .item-actions {
             display: flex;
-            gap: 10px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid rgba(30, 58, 138, 0.3);
+            gap: 12px;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(139, 92, 246, 0.15);
 
             .btn-confirm {
-              background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.1) 100%);
-              border: 1px solid rgba(34, 197, 94, 0.4);
-              border-radius: 6px;
-              color: #4ade80;
-              padding: 6px 16px;
-              font-size: 12px;
+              flex: 1;
+              background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+              border: none;
+              border-radius: 8px;
+              color: #fff;
+              padding: 10px 20px;
+              font-size: 13px;
+              font-weight: 600;
               cursor: pointer;
-              transition: all 0.2s;
+              transition: all 0.25s ease;
+              box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 
               &:hover {
-                background: linear-gradient(135deg, rgba(34, 197, 94, 0.4) 0%, rgba(22, 163, 74, 0.2) 100%);
-                transform: translateY(-1px);
+                background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
+              }
+
+              &:active {
+                transform: translateY(0);
               }
             }
 
             .btn-confirm-all {
-              background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(109, 40, 217, 0.1) 100%);
-              border: 1px solid rgba(139, 92, 246, 0.4);
-              border-radius: 6px;
-              color: #a78bfa;
-              padding: 6px 16px;
-              font-size: 12px;
+              flex: 1;
+              background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+              border: none;
+              border-radius: 8px;
+              color: #fff;
+              padding: 10px 20px;
+              font-size: 13px;
+              font-weight: 600;
               cursor: pointer;
-              transition: all 0.2s;
+              transition: all 0.25s ease;
+              box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 
               &:hover {
-                background: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(109, 40, 217, 0.2) 100%);
-                transform: translateY(-1px);
+                background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+              }
+
+              &:active {
+                transform: translateY(0);
               }
             }
           }
@@ -4080,13 +4315,21 @@ export default {
             position: absolute;
             top: 12px;
             right: 12px;
-            font-size: 12px;
+            font-size: 14px;
             color: #64748b;
             cursor: pointer;
             transition: all 0.2s;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(100, 116, 139, 0.2);
+            border-radius: 50%;
 
             &:hover {
               color: #fff;
+              background: rgba(139, 92, 246, 0.4);
             }
           }
         }

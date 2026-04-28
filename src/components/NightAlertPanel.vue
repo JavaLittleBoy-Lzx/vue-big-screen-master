@@ -503,7 +503,8 @@ export default {
     z-index: 10000;
     width: 95%;
     max-width: 1400px;
-    height: 90vh;
+    height: 85vh;
+    min-height: 600px;
     background: linear-gradient(135deg, rgba(11, 19, 42, 0.98) 0%, rgba(15, 23, 42, 0.95) 100%);
     border: 1px solid rgba(59, 130, 246, 0.3);
     border-radius: 16px;
@@ -517,11 +518,14 @@ export default {
   .modal-header {
     display: flex;
     align-items: center;
-    padding: 12px 20px;
+    padding: 10px 20px;
     border-bottom: 1px solid rgba(59, 130, 246, 0.2);
     background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
     flex-shrink: 0;
     gap: 16px;
+    min-height: 50px;
+    height: 50px;
+    box-sizing: border-box;
 
     .header-left {
       display: flex;
@@ -541,6 +545,7 @@ export default {
       align-items: center;
       gap: 8px;
       margin-left: auto;
+      flex-wrap: nowrap;
 
       .date-input {
         background: rgba(11, 19, 42, 0.9);
@@ -606,6 +611,7 @@ export default {
     overflow: hidden;
     padding: 12px 16px;
     gap: 10px;
+    min-height: 0;
   }
 
   /* 汇总卡片 */
@@ -614,6 +620,7 @@ export default {
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     flex-shrink: 0;
+    min-height: 60px;
 
     .summary-card {
       display: flex;
@@ -654,13 +661,17 @@ export default {
     gap: 10px;
     overflow: hidden;
     min-height: 0;
+    height: calc(85vh - 180px);
   }
 
   .chart-row {
     display: flex;
     gap: 10px;
-    flex: 1;
-    min-height: 0;
+    flex-shrink: 0;
+    height: calc((100% - 20px) / 3);
+
+    &:first-child { margin-top: 0; }
+    &:last-child { margin-bottom: 0; }
   }
 
   .chart-card {
@@ -672,6 +683,7 @@ export default {
     flex-direction: column;
     overflow: hidden;
     min-height: 0;
+    flex-shrink: 0;
 
     &.flex-1 { flex: 1; }
     &.flex-2 { flex: 2; }
@@ -691,7 +703,7 @@ export default {
 
     .chart-body {
       flex: 1;
-      min-height: 0;
+      min-height: 80px;
       position: relative;
     }
 

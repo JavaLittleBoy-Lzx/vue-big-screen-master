@@ -555,24 +555,30 @@
               </div>
               <div class="filter-item">
                 <label>{{ detailFilters.channelType === 'enter' ? '进场通道：' : '出场通道：' }}</label>
-                <select v-model="detailFilters.channel" class="filter-select filter-select-channel">
-                  <option value="">全部通道</option>
-                  <option v-for="channel in availableChannels" :key="channel" :value="channel">
-                    {{ channel }}
-                  </option>
-                </select>
+                <div class="filter-select-with-clear">
+                  <select v-model="detailFilters.channel" class="filter-select filter-select-channel">
+                    <option value="">全部通道</option>
+                    <option v-for="channel in availableChannels" :key="channel" :value="channel">
+                      {{ channel }}
+                    </option>
+                  </select>
+                  <button v-if="detailFilters.channel" class="clear-btn" @click="detailFilters.channel = ''; loadDetailData()" title="清空">×</button>
+                </div>
               </div>
             </template>
             <!-- 其他车辆类型：普通通道选择 -->
             <template v-else>
               <div class="filter-item">
                 <label>通道：</label>
-                <select v-model="detailFilters.channel" class="filter-select filter-select-channel">
-                  <option value="">全部通道</option>
-                  <option v-for="channel in availableChannels" :key="channel" :value="channel">
-                    {{ channel }}
-                  </option>
-                </select>
+                <div class="filter-select-with-clear">
+                  <select v-model="detailFilters.channel" class="filter-select filter-select-channel">
+                    <option value="">全部通道</option>
+                    <option v-for="channel in availableChannels" :key="channel" :value="channel">
+                      {{ channel }}
+                    </option>
+                  </select>
+                  <button v-if="detailFilters.channel" class="clear-btn" @click="detailFilters.channel = ''; loadDetailData()" title="清空">×</button>
+                </div>
               </div>
             </template>
           </template>
@@ -606,17 +612,23 @@
             </div>
             <div class="filter-item">
               <label>学院/部门：</label>
-              <input v-model="detailFilters.organization" type="text" placeholder="请输入学院或部门"
-                @keyup.enter="loadDetailData" class="filter-input filter-input-org" />
+              <div class="filter-select-with-clear">
+                <input v-model="detailFilters.organization" type="text" placeholder="请输入学院或部门"
+                  @keyup.enter="loadDetailData" class="filter-input filter-input-org" />
+                <button v-if="detailFilters.organization" class="clear-btn" @click="detailFilters.organization = ''; loadDetailData()" title="清空">×</button>
+              </div>
             </div>
             <div class="filter-item">
               <label>通道：</label>
-              <select v-model="detailFilters.channel" class="filter-select filter-select-channel">
-                <option value="">全部通道</option>
-                <option v-for="channel in availableChannels" :key="channel" :value="channel">
-                  {{ channel }}
-                </option>
-              </select>
+              <div class="filter-select-with-clear">
+                <select v-model="detailFilters.channel" class="filter-select filter-select-channel">
+                  <option value="">全部通道</option>
+                  <option v-for="channel in availableChannels" :key="channel" :value="channel">
+                    {{ channel }}
+                  </option>
+                </select>
+                <button v-if="detailFilters.channel" class="clear-btn" @click="detailFilters.channel = ''; loadDetailData()" title="清空">×</button>
+              </div>
             </div>
           </template>
 
@@ -2689,7 +2701,7 @@ export default {
                 } else {
                   // console.log('⏸️ [人脸监控] 跳过旧数据:', channel, '现有时间:', existingData.timestamp, '新数据时间:', this.formatTime(record.eventTime));
                 }
-              };
+              }
             });
             
             // 将映射表转换回数组
@@ -12762,5 +12774,44 @@ export default {
   to {
     opacity: 1;
   }
+}
+
+/* 带清空按钮的筛选选择器容器 */
+.filter-select-with-clear {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+}
+
+.filter-select-with-clear .filter-select,
+.filter-select-with-clear .filter-input {
+  padding-right: 28px;
+}
+
+.filter-select-with-clear .clear-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 2;
+}
+
+.filter-select-with-clear .clear-btn:hover {
+  background: rgba(255, 87, 34, 0.8);
+  color: white;
 }
 </style>

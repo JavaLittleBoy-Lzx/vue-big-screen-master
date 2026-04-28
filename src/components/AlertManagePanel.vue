@@ -1,23 +1,19 @@
 <template>
   <div class="alert-manage-panel">
-    <!-- 主Tab切换 -->
-    <div class="main-tabs">
-      <div 
-        class="main-tab" 
-        :class="{ active: alertTab === 'pending' }" 
-        @click="switchTab('pending')">
-        <span class="tab-icon">🔔</span>
+    <!-- 筛选条件：独立的复选框选择 -->
+    <div class="main-filter-checkboxes">
+      <label class="filter-checkbox" :class="{ active: showPending }">
+        <input type="checkbox" v-model="showPending" @change="onFilterChange">
+        <span class="checkbox-icon">🔔</span>
         <span>未确认提醒</span>
         <span v-if="getTotalPendingCount() > 0" class="count-badge">{{ getTotalPendingCount() }}</span>
-      </div>
-      <div 
-        class="main-tab" 
-        :class="{ active: alertTab === 'history' }" 
-        @click="switchTab('history')">
-        <span class="tab-icon">📜</span>
+      </label>
+      <label class="filter-checkbox" :class="{ active: showHistory }">
+        <input type="checkbox" v-model="showHistory" @change="onFilterChange">
+        <span class="checkbox-icon">📜</span>
         <span>历史记录</span>
         <span v-if="getTotalHistoryCount() > 0" class="count-badge">{{ getTotalHistoryCount() }}</span>
-      </div>
+      </label>
     </div>
 
     <!-- 子Tab切换（车辆/行人分类） -->
@@ -44,13 +40,12 @@
     <div class="action-bar">
       <div class="current-view-info">
         <span class="view-label">
-          {{ alertTab === 'pending' ? '未确认' : '历史记录' }} - 
-          {{ alertType === 'vehicle' ? '🚗 车辆' : '👤 人员' }}
+          {{ getViewLabel() }} - {{ alertType === 'vehicle' ? '🚗 车辆' : '👤 人员' }}
         </span>
         <span class="count-info">({{ alertList.length }}条)</span>
       </div>
-      
-      <div v-if="alertTab === 'pending' && alertList.length > 0" class="batch-actions">
+
+      <div v-if="showPending && alertList.length > 0" class="batch-actions">
         <button class="btn-batch-confirm" @click="confirmAll">
           <span>✓</span> 全部确认
         </button>
@@ -60,8 +55,8 @@
     <!-- 提醒列表 -->
     <div class="alert-list" v-loading="loading">
       <div v-if="alertList.length === 0" class="empty-state">
-        <span class="empty-icon">{{ alertTab === 'pending' ? '✅' : '📭' }}</span>
-        <p>{{ alertTab === 'pending' ? '暂无未确认提醒' : '暂无历史记录' }}</p>
+        <span class="empty-icon">{{ getEmptyIcon() }}</span>
+        <p>{{ getEmptyText() }}</p>
       </div>
 
       <div v-else class="list-container">
@@ -148,9 +143,9 @@
 
           <!-- 操作按钮 -->
           <div class="alert-actions">
-            <button 
-              v-if="alertTab === 'pending'"
-              class="btn-confirm" 
+            <button
+              v-if="item._source === 'pending'"
+              class="btn-confirm"
               @click="confirmAlert(item.id)">
               <span>✓</span> 确认
             </button>
@@ -176,7 +171,8 @@ export default {
   name: 'AlertManagePanel',
   data() {
     return {
-      alertTab: 'pending', // pending: 未确认, history: 历史记录
+      showPending: true, // 是否显示未确认提醒
+      showHistory: false, // 是否显示历史记录
       alertType: 'vehicle', // vehicle: 车辆, person: 人员
       alertList: [],
       loading: false,
@@ -192,8 +188,8 @@ export default {
     this.loadAlerts();
   },
   methods: {
-    switchTab(tab) {
-      this.alertTab = tab;
+    onFilterChange() {
+      // 筛选条件变化时重新加载数据
       this.loadAlerts();
     },
     switchType(type) {
@@ -210,21 +206,26 @@ export default {
     },
     // 获取当前类型的数量
     getTypeCount(type) {
-      if (this.alertTab === 'pending') {
+      if (this.showPending && this.showHistory) {
+        // 同时显示两种类型时，返回总数
+        return (type === 'vehicle' ? this.pendingVehicleCount : this.pendingPersonCount) +
+               (type === 'vehicle' ? this.historyVehicleCount : this.historyPersonCount);
+      } else if (this.showPending) {
         return type === 'vehicle' ? this.pendingVehicleCount : this.pendingPersonCount;
-      } else {
+      } else if (this.showHistory) {
         return type === 'vehicle' ? this.historyVehicleCount : this.historyPersonCount;
       }
+      return 0;
     },
     async loadAlerts() {
       this.loading = true;
       try {
-        // 加载当前选中类型的数据
-        await this.loadCurrentTypeAlerts();
-        
+        // 根据筛选条件加载数据
+        await this.loadFilteredAlerts();
+
         // 同时加载统计数据（用于显示徽章数量）
         await this.loadStatistics();
-        
+
       } catch (error) {
         console.error('获取提醒列表失败:', error);
         this.$message.error('获取提醒列表失败');
@@ -232,36 +233,58 @@ export default {
         this.loading = false;
       }
     },
-    
-    // 加载当前选中类型的提醒数据
-    async loadCurrentTypeAlerts() {
-      const endpoint = this.alertTab === 'pending' 
-        ? 'http://localhost:8675/parking/focus/alerts/pending' 
-        : 'http://localhost:8675/parking/focus/alerts/history';
-      
-      const params = {
-        page: 1,
-        limit: 100,
-        alert_type: this.alertType
-      };
-      
-      const response = await axios.get(endpoint, { params });
-      
-      // 处理嵌套响应格式
-      let resultData, resultCode;
-      if (response.data.code === "0" && response.data.data) {
-        resultCode = response.data.data.code;
-        resultData = response.data.data.data;
-      } else {
-        resultCode = response.data.code;
-        resultData = response.data.data;
+
+    // 根据筛选条件加载提醒数据
+    async loadFilteredAlerts() {
+      const requests = [];
+
+      if (this.showPending) {
+        requests.push(
+          axios.get('http://localhost:8675/parking/focus/alerts/pending', {
+            params: { page: 1, limit: 100, alert_type: this.alertType }
+          }).then(res => ({ type: 'pending', data: res.data }))
+        );
       }
-      
-      if (resultCode === 200) {
-        this.alertList = resultData.list || [];
-      } else {
-        this.$message.error(response.data.message || '获取提醒列表失败');
+
+      if (this.showHistory) {
+        requests.push(
+          axios.get('http://localhost:8675/parking/focus/alerts/history', {
+            params: { page: 1, limit: 100, alert_type: this.alertType }
+          }).then(res => ({ type: 'history', data: res.data }))
+        );
       }
+
+      if (requests.length === 0) {
+        this.alertList = [];
+        return;
+      }
+
+      const results = await Promise.all(requests);
+
+      // 合并所有结果
+      this.alertList = [];
+      for (const result of results) {
+        let resultData, resultCode;
+        if (result.data.code === "0" && result.data.data) {
+          resultCode = result.data.data.code;
+          resultData = result.data.data.data;
+        } else {
+          resultCode = result.data.code;
+          resultData = result.data.data;
+        }
+
+        if (resultCode === 200 && resultData) {
+          const list = resultData.list || [];
+          // 标记数据来源
+          list.forEach(item => {
+            item._source = result.type;
+          });
+          this.alertList.push(...list);
+        }
+      }
+
+      // 按时间倒序排序
+      this.alertList.sort((a, b) => new Date(b.event_time) - new Date(a.event_time));
     },
     
     // 加载统计数据
@@ -464,6 +487,36 @@ export default {
       if (!time) return '';
       const date = new Date(time);
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    },
+    getViewLabel() {
+      if (this.showPending && this.showHistory) {
+        return '未确认 + 历史记录';
+      } else if (this.showPending) {
+        return '未确认';
+      } else if (this.showHistory) {
+        return '历史记录';
+      }
+      return '请选择筛选条件';
+    },
+    getEmptyIcon() {
+      if (this.showPending && this.showHistory) {
+        return '📭';
+      } else if (this.showPending) {
+        return '✅';
+      } else if (this.showHistory) {
+        return '📭';
+      }
+      return '🔍';
+    },
+    getEmptyText() {
+      if (this.showPending && this.showHistory) {
+        return '暂无数据';
+      } else if (this.showPending) {
+        return '暂无未确认提醒';
+      } else if (this.showHistory) {
+        return '暂无历史记录';
+      }
+      return '请选择要显示的筛选条件';
     }
   }
 };
@@ -477,8 +530,8 @@ export default {
   overflow: hidden;
 }
 
-/* 主Tab样式 */
-.main-tabs {
+/* 筛选复选框样式 */
+.main-filter-checkboxes {
   display: flex;
   padding: 16px 24px;
   background: rgba(0, 0, 0, 0.3);
@@ -486,7 +539,7 @@ export default {
   gap: 16px;
 }
 
-.main-tab {
+.filter-checkbox {
   padding: 12px 24px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -500,21 +553,30 @@ export default {
   align-items: center;
   gap: 10px;
   position: relative;
+  user-select: none;
 }
 
-.main-tab:hover {
+.filter-checkbox input {
+  display: none;
+}
+
+.filter-checkbox:hover {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(0, 255, 255, 0.4);
   color: rgba(255, 255, 255, 0.95);
   transform: translateY(-1px);
 }
 
-.main-tab.active {
+.filter-checkbox.active {
   background: linear-gradient(135deg, rgba(0, 201, 255, 0.25) 0%, rgba(0, 102, 255, 0.25) 100%);
   border-color: #00c9ff;
   color: #00ffff;
   font-weight: bold;
   box-shadow: 0 4px 12px rgba(0, 201, 255, 0.3);
+}
+
+.checkbox-icon {
+  font-size: 18px;
 }
 
 /* 子Tab样式 */
